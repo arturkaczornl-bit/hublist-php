@@ -193,6 +193,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ['client', 'ShakesPeer', 'https://github.com/rufuscoder/Shakespeer', 'Wieloplatformowy klient Direct Connect z repozytorium społecznościowym.'],
                         ['client', 'ncdc', 'https://dev.yorhel.nl/ncdc', 'Lekki klient Direct Connect z interfejsem tekstowym; obsługuje ADC i NMDC. Projekt jest utrzymywany pasywnie.'],
                         ['client', 'ApexDC++ (wersja archiwalna)', 'https://sourceforge.net/projects/apexdc/', 'Klasyczny klient Direct Connect. Projekt archiwalny; sprawdź zgodność i skanuj pobrane pliki.'],
+                        ['client', 'TorrentDC++ (archiwalny)', 'https://sourceforge.net/projects/p2ptorrentdc/', 'Historyczny klient Windows obsługujący Direct Connect, ADC i BitTorrent. Przed użyciem sprawdź dostępność oraz bezpieczeństwo plików projektu.'],
+                        ['client', 'FearDC', 'https://github.com/RoLex/feardc', 'Fork klienta DC++ z obsługą TLS dla NMDC; repozytorium zawiera kod i informacje o wydaniach.'],
+                        ['client', 'StrongDC++ (projekt historyczny)', 'https://en.wikipedia.org/wiki/DC%2B%2B', 'Historyczny klient i baza dla wielu forków DC++. Link do przeglądu klientów; brak zweryfikowanego instalatora.'],
                         ['client', 'Open Direct Connect (klient historyczny)', 'https://en.wikipedia.org/wiki/Direct_Connect_(protocol)', 'Historyczny klient Direct Connect, niekompletny i nieutrzymywany. Link prowadzi do opisu protokołu; brak zweryfikowanego wydania do pobrania.'],
                         ['server', 'Verlihub', 'https://github.com/Verlihub/verlihub/releases', 'Serwer hubów Direct Connect NMDC dla systemu Linux.'],
                         ['server', 'ADCH++', 'https://sourceforge.net/projects/adchpp/files/', 'Archiwum wydań serwera hubów Direct Connect ADC.'],
@@ -201,6 +204,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ['server', 'Luadch-ng', 'https://github.com/luadch-ng/luadch-ng', 'Nowszy, rozwijany fork serwera Luadch dla ADC/ADCS.'],
                         ['server', 'go-dcpp', 'https://github.com/direct-connect/go-dcpp', 'Hybrydowy serwer Direct Connect napisany w Go.'],
                         ['server', 'YnHub (archiwalny)', 'https://portableapps.com/node/25130', 'Serwer hubów DC++ dla Windows; rozwój zakończono w 2008 r. Link do archiwalnego opisu, nie do instalatora.'],
+                        ['other', 'Octopus DC-Linker (łączenie hubów)', 'https://github.com/burek/Octopus-DC-Linker', 'Narzędzie NMDC napisane w PHP do łączenia kilku hubów w jedną sieć; to linker, a nie samodzielny hubsoft.'],
                         ['server', 'PtokaX', 'http://www.ptokax.org/', 'Serwer hubów NMDC z obsługą Lua; oficjalna strona używa HTTP.'],
                     ];
                     $stmt = $pdo->prepare('INSERT INTO downloads (category, name, website, description) VALUES (?, ?, ?, ?)');
