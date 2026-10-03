@@ -12,10 +12,6 @@ function app_config(): array
             http_response_code(503);
             exit('Hublist nie została skonfigurowana. Uruchom setup.php.');
         }
-        if ($iconUrl !== '' && (filter_var($iconUrl, FILTER_VALIDATE_URL) === false
-            || strtolower((string) parse_url($iconUrl, PHP_URL_SCHEME)) !== 'https')) {
-            throw new InvalidArgumentException('Adres ikony huba musi być prawidłowym adresem HTTPS.');
-        }
         $config = require $path;
     }
     return $config;

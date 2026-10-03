@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/common.php';
+
 if (is_file(__DIR__ . '/config.php')) {
     http_response_code(403);
     exit('Aplikacja jest już skonfigurowana. Usuń setup.php albo skontaktuj się z administratorem.');
