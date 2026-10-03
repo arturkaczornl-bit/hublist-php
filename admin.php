@@ -188,8 +188,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!preg_match('/^[A-Za-z0-9_.-]{3,32}$/', $nick)) {
                     throw new InvalidArgumentException('Nick pingera może zawierać 3–32 litery, cyfry, kropki, myślniki i podkreślenia.');
                 }
-                $stmt = $pdo->prepare("INSERT INTO app_settings (setting_key,setting_value) VALUES ('pinger_nick',?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
-                $stmt->execute([$nick]);
+                $description = trim(post_string($_POST, 'pinger_description'));
+                $version = trim(post_string($_POST, 'pinger_version'));
+                $email = trim(post_string($_POST, 'pinger_email'));
+                $connection = trim(post_string($_POST, 'pinger_connection'));
+                $interval = filter_var(post_string($_POST, 'pinger_interval'), FILTER_VALIDATE_INT);
+                $safeProfileField = static fn(string $value): bool =>
+                    !preg_match('/[\x00-\x1F\x7F|$]/', $value);
+                if (utf8_length($description) === null || utf8_length($description) > 80 || !$safeProfileField($description)) {
+                    throw new InvalidArgumentException('Opis pingera może mieć maksymalnie 80 znaków i nie może zawierać znaków sterujących ani separatorów protokołu.');
+                }
+                if (!preg_match('/^[A-Za-z0-9 ._+()\-]{1,40}$/', $version)) {
+                    throw new InvalidArgumentException('Wersja klienta może mieć 1–40 znaków: litery, cyfry, spacje oraz . _ + ( ) -.');
+                }
+                if ($email !== '' && (filter_var($email, FILTER_VALIDATE_EMAIL) === false || strlen($email) > 254 || !$safeProfileField($email))) {
+                    throw new InvalidArgumentException('Podaj prawidłowy adres e-mail albo pozostaw pole puste.');
+                }
+                if (utf8_length($connection) === null || utf8_length($connection) > 32
+                    || !$safeProfileField($connection) || !preg_match('/^[A-Za-z0-9 ._+\/()-]*$/', $connection)) {
+                    throw new InvalidArgumentException('Typ łącza może mieć maksymalnie 32 znaki i zawierać litery, cyfry, spacje oraz . _ + / ( ) -.');
+                }
+                if ($interval === false || $interval < 5 || $interval > 10080) {
+                    throw new InvalidArgumentException('Częstotliwość pingowania musi wynosić od 5 do 10080 minut.');
+                }
+                $settings = [
+                    'pinger_nick' => $nick,
+                    'pinger_description' => $description,
+                    'pinger_version' => $version,
+                    'pinger_email' => $email,
+                    'pinger_connection' => $connection,
+                    'pinger_interval' => (string) $interval,
+                ];
+                $stmt = $pdo->prepare('INSERT INTO app_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
+                foreach ($settings as $key => $value) {
+                    $stmt->execute([$key, $value]);
+                }
                 $notice = 'Ustawienia pingera zapisane.';
             } elseif ($action === 'change_password') {
                 $currentPassword = post_string($_POST, 'current_password');
@@ -261,8 +294,21 @@ $hubRows = $pdo->query("SELECT * FROM hubs WHERE status <> 'rejected' ORDER BY s
 $downloadRows = $pdo->query('SELECT * FROM downloads ORDER BY category, sort_order, name')->fetchAll();
 $downloadCategories = download_categories();
 $downloadCategoryRows = download_category_details();
-$pingerStmt = $pdo->query("SELECT setting_value FROM app_settings WHERE setting_key='pinger_nick'");
-$pingerNick = (string) ($pingerStmt->fetchColumn() ?: 'Hublist-Pinger');
+$pingerSettings = [
+    'pinger_nick' => 'Hublist-Pinger',
+    'pinger_description' => 'Hublist pinger',
+    'pinger_version' => '1.0',
+    'pinger_email' => '',
+    'pinger_connection' => 'DSL',
+    'pinger_interval' => '48',
+];
+$pingerSettingsStmt = $pdo->query("SELECT setting_key,setting_value FROM app_settings WHERE setting_key IN
+    ('pinger_nick','pinger_description','pinger_version','pinger_email','pinger_connection','pinger_interval')");
+foreach ($pingerSettingsStmt->fetchAll() as $setting) {
+    if (array_key_exists($setting['setting_key'], $pingerSettings)) {
+        $pingerSettings[$setting['setting_key']] = (string) $setting['setting_value'];
+    }
+}
 $editHubId = filter_var(is_string($_GET['edit_hub'] ?? null) ? $_GET['edit_hub'] : '', FILTER_VALIDATE_INT);
 $editHub = null;
 if ($editHubId) {
@@ -420,13 +466,18 @@ page_start('Panel administracyjny');
             <form method="post"><input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="action" value="import_public_hubs"><button type="submit">Importuj publiczne huby</button></form>
         </section>
         <section class="panel"><h2>Ustawienia pingera</h2>
-            <p>Uruchamiaj `php pinger.php --limit=500` w zadaniu cron co 48 minut. Pinger loguje się do hubów jako widoczny użytkownik; huby wymagające hasła oznacza jako wymagające autoryzacji.</p>
+            <p>Pinger łączy się jawnie jako widoczny użytkownik. Huby wymagające hasła są oznaczane jako wymagające autoryzacji; pinger nie próbuje ich obchodzić. Ustawione hasła nie są wysyłane.</p>
             <form method="post" class="grid">
                 <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="action" value="save_settings">
-                <label class="field">Nick pingera<input name="pinger_nick" maxlength="32" minlength="3" required value="<?= e($pingerNick) ?>"></label>
+                <label class="field">Nick pingera<input name="pinger_nick" maxlength="32" minlength="3" required value="<?= e($pingerSettings['pinger_nick']) ?>"></label>
+                <label class="field">Opis pingera<input name="pinger_description" maxlength="80" value="<?= e($pingerSettings['pinger_description']) ?>"></label>
+                <label class="field">Wersja klienta DC<input name="pinger_version" maxlength="40" required value="<?= e($pingerSettings['pinger_version']) ?>"></label>
+                <label class="field">E-mail pingera<input name="pinger_email" type="email" maxlength="254" value="<?= e($pingerSettings['pinger_email']) ?>"></label>
+                <label class="field">Typ łącza<input name="pinger_connection" maxlength="32" value="<?= e($pingerSettings['pinger_connection']) ?>"></label>
+                <label class="field">Odstęp między pingami tego samego huba (minuty)<input name="pinger_interval" type="number" min="5" max="10080" required value="<?= e($pingerSettings['pinger_interval']) ?>"></label>
                 <div class="field"><button type="submit">Zapisz ustawienia</button></div>
             </form>
-            <p class="note">Panel admina nie może samodzielnie ustawić crona. W panelu hostingu dodaj polecenie wskazane w README. Weryfikuj nowe zgłoszenia przed publikacją.</p>
+            <p class="note">Typ łącza jest używany w opisie NMDC; ADC nie ma standardowego pola na ten parametr. Aby harmonogram z panelu działał dokładnie, skonfiguruj cron zgodnie z README tak, by uruchamiał pingera co minutę. Panel admina nie może samodzielnie zmienić crona hostingu.</p>
         </section>
         <section class="panel"><h2>Zmień hasło administratora</h2>
             <form method="post" class="grid">

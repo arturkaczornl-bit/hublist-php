@@ -32,7 +32,7 @@ Instalator próbuje zaimportować huby z kilku publicznych źródeł. Zewnętrzn
 - `add_hub.php` — osobna strona formularza zgłoszenia huba; zgłoszenie pozostaje ukryte do zatwierdzenia, strona główna pokazuje maksymalnie pięć najnowszych oczekujących;
 - `download.php` — publiczna Pobieralnia z kategoriami, opisami i linkami zarządzanymi z panelu; administrator może edytować nazwy/opisy kategorii, dodawać nowe kategorie i pozycje, zmieniać linki oraz usuwać wpisy. Kliknięcia przycisków pobierania są liczone i widoczne publicznie oraz w administracji. Licznik odzwierciedla kliknięcia/przekierowania, nie potwierdza zakończenia pobrania z zewnętrznej strony;
 - `imports.php` — ręczny import dostępnych feedów do moderacji;
-- `pinger.php` — skrypt CLI, loguje się pod skonfigurowanym nickiem (bot jest widoczny na hubie), sprawdza NMDC/ADC oraz TLS i zapisuje historię. Jeśli kraj nie został ustawiony ręcznie, pinger geolokalizuje publiczny adres IP przez usługę `ipwho.is` i zapisuje kod kraju oraz użyty adres IP. Oznacza to przekazanie adresu IP hosta usłudze geolokalizacyjnej; lokalizacja IP jest przybliżona. Huby wymagające hasła lub odrzucające pingera nie będą omijane; ich stan będzie pokazany jako błąd.
+- `pinger.php` — skrypt CLI korzysta z profilu i odstępu pingowania skonfigurowanych w administracji. Nick, opis, wersja klienta DC i e-mail są przekazywane hubom przez NMDC/ADC; typ łącza jest wysyłany w profilu NMDC. Bot jest widoczny na hubie. Pinger sprawdza NMDC/ADC oraz TLS i zapisuje historię. Jeśli kraj nie został ustawiony ręcznie, geolokalizuje publiczny adres IP przez usługę `ipwho.is` i zapisuje kod kraju oraz użyty adres IP. Oznacza to przekazanie adresu IP hosta usłudze geolokalizacyjnej; lokalizacja IP jest przybliżona. Huby wymagające hasła lub odrzucające pingera nie będą omijane; ich stan będzie pokazany jako błąd. Pinger nie obsługuje haseł hubów.
 
 Pinger nie gwarantuje danych, których hub nie udostępnia. Brak statystyki pozostaje pusty, nie jest zgadywany. Pinger wymaga publicznego adresu IP huba i blokuje adresy prywatne/lokalne.
 
@@ -49,19 +49,15 @@ Wklej pełny URL jako adres listy hubów w ustawieniach klienta. Jeśli hosting 
 
 Katalog zawiera linki do klientów, serwerów hubów, skryptów i narzędzi, m.in. AirDC++, DC++, EiskaltDC++, FlylinkDC++, Jucy, ShakesPeer, ncdc, ApexDC++, TorrentDC++, FearDC, StrongDC++, Open Direct Connect, Verlihub, ADCH++, µHub (uhub), Luadch, Luadch-ng, go-dcpp, YnHub, PtokaX, Octopus DC-Linker i repozytoriów Lua. Zawiera też wpisy historycznych hubsoftów z [archiwalnej listy cstrike.ro](https://www.cstrike.ro/download_dchub_servers.php), w tym ADCHub, Admi Hub, Black DC, DC Galaxy Hub, DCH Pro, Dev Direct Connect, Digital Hub, Direct Connect Hub, Dot Net Hub, Drakes DcPhantom, DSHub, HexHub, LatHack, NAAF DC Hub, Nitro, ODCH Console, Open DC, RDC, SBSoft EA Hub, SDCH, TamilHub Server, Underground DC Hub, V-HuB, X-Hub, XS Hub, Yabba, Yadch, YHub, Zefir HUBsoft++ i ZpoC Room Server. Dopisano również nazwy historyczne przekazane przez administratora: Aquila DC, Verigio — Virtual Network Hub i Hub-Link; nie znaleziono dla nich potwierdzonych plików na wskazanej liście. To katalog informacyjny, nie kopia plików ani gwarantowany spis wszystkich wydań. Wpisy archiwalne nie linkują bezpośrednio do starych plików wykonywalnych; przed pobraniem z zewnętrznego archiwum sprawdź autora, aktualność, licencję, kod i bezpieczeństwo. ncdc jest utrzymywany pasywnie, a ApexDC++, TorrentDC++, StrongDC++ i YnHub są historyczne. Wpis Open Direct Connect ma charakter historyczny i nie wskazuje zweryfikowanego pliku do pobrania. PtokaX ma oficjalną stronę HTTP bez szyfrowania — zachowaj szczególną ostrożność przy pobieraniu z tego źródła.
 
-## Cron — uruchamianie co 48 minut
+## Cron i częstotliwość pingowania
 
-Wyrażenie `*/48 * * * *` **nie** oznacza równych odstępów 48 minut w cron. Aby zachować odstęp, dodaj poniższe pięć wpisów (zastąp ścieżkę do PHP i pliku):
+W administracji ustaw odstęp (od 5 do 10080 minut) między sprawdzeniami tego samego huba. Aby taki odstęp był egzekwowany niezależnie od granic cron, uruchamiaj skrypt co minutę; za każdym razem zostaną wybrane wyłącznie huby, których termin już nadszedł:
 
 ```cron
-0 0,4,8,12,16,20 * * * /usr/bin/php /sciezka/do/strony/pinger.php --limit=500
-48 0,4,8,12,16,20 * * * /usr/bin/php /sciezka/do/strony/pinger.php --limit=500
-36 1,5,9,13,17,21 * * * /usr/bin/php /sciezka/do/strony/pinger.php --limit=500
-24 2,6,10,14,18,22 * * * /usr/bin/php /sciezka/do/strony/pinger.php --limit=500
-12 3,7,11,15,19,23 * * * /usr/bin/php /sciezka/do/strony/pinger.php --limit=500
+* * * * * /usr/bin/php /sciezka/do/strony/pinger.php --limit=500
 ```
 
-Cron używa strefy czasowej serwera. Ścieżkę do PHP CLI oraz katalogu strony sprawdź w panelu hostingu. `--limit=500` ogranicza maksymalną liczbę hubów w jednym przebiegu; sam przebieg ma dodatkowy limit 240 sekund, więc przy dużej liczbie hubów reszta zostanie sprawdzona w kolejnych uruchomieniach.
+Zastąp ścieżkę do PHP i strony wartościami z hostingu. `--limit=500` ogranicza liczbę hubów w jednym przebiegu; sam przebieg ma limit 240 sekund, więc przy dużej liczbie hubów pozostałe zostaną sprawdzone przy następnych uruchomieniach. Panel strony nie może samodzielnie zmienić crona hostingu.
 
 ## Bezpieczeństwo i diagnostyka
 

@@ -94,9 +94,19 @@ $messages = '$Lock EXTENDEDPROTOCOLABCABCABCABC Pk=Hub|'
     . '$HubName Test Hub|$HubTopic Protocol test|$Hello TestBot|$Hello User1|'
     . '$MyINFO $ALL User1 description$ $DSL$email$123$|$NickList User1$$User2$$|';
 fwrite($server, $messages);
-$result = ping_nmdc($client, 'TestBot', (int) microtime(true));
+$profile = [
+    'description' => 'Test pinger',
+    'version' => '1.234',
+    'email' => 'bot@example.org',
+    'connection' => 'Fiber',
+];
+$result = ping_nmdc($client, 'TestBot', (int) microtime(true), $profile);
+stream_set_blocking($server, false);
+$sent = stream_get_contents($server);
 fclose($server);
 fclose($client);
+expect(str_contains($sent, '$Version 1.234|'), 'Configured NMDC client version should be sent.');
+expect(str_contains($sent, '$MyINFO $ALL TestBot Test pinger$ $Fiber$bot@example.org$0$'), 'Configured NMDC profile should be sent.');
 expect($result['hub_name'] === 'Test Hub', 'NMDC hub name should be parsed.');
 expect($result['hub_topic'] === 'Protocol test', 'NMDC topic should be parsed.');
 expect($result['online_users'] === 2, 'NMDC nick list should count unique users.');

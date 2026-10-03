@@ -202,7 +202,17 @@ function escape_nmdc_key(string $lock): string
     return $result;
 }
 
-function ping_nmdc($stream, string $nick, int $started): array
+function sanitize_nmdc_profile_field(string $value): string
+{
+    return trim(preg_replace('/[\x00-\x1F\x7F|$]/u', ' ', $value) ?? '');
+}
+
+function escape_adc_profile_field(string $value): string
+{
+    return str_replace(["\\", " "], ["\\\\", "\\s"], $value);
+}
+
+function ping_nmdc($stream, string $nick, int $started, array $profile): array
 {
     $deadline = microtime(true) + PING_SESSION_TIMEOUT;
     $hubName = '';
@@ -221,7 +231,7 @@ function ping_nmdc($stream, string $nick, int $started): array
             if ($lock === '') {
                 throw new RuntimeException('Pusta odpowiedź Lock.');
             }
-            send_all($stream, '$Supports UserCommand UserIP2 TTHSearch|$Key ' . escape_nmdc_key($lock) . '|$ValidateNick ' . $nick . '|$Version 1,0091|');
+            send_all($stream, '$Supports UserCommand UserIP2 TTHSearch|$Key ' . escape_nmdc_key($lock) . '|$ValidateNick ' . $nick . '|$Version ' . $profile['version'] . '|');
             continue;
         }
         if (stripos($line, '$GetPass') === 0) {
@@ -232,7 +242,8 @@ function ping_nmdc($stream, string $nick, int $started): array
             if (strcasecmp($helloNick, $nick) === 0) {
                 $ownNickSeen = true;
                 if (!$sentInfo) {
-                    send_all($stream, '$MyINFO $ALL ' . $nick . ' Hublist pinger$ $DSL$$0$|$GetNickList|');
+                    send_all($stream, '$MyINFO $ALL ' . $nick . ' ' . $profile['description'] . '$ $'
+                        . $profile['connection'] . '$' . $profile['email'] . '$0$|$GetNickList|');
                     $sentInfo = true;
                 }
             } else {
@@ -314,7 +325,7 @@ function decode_adc_text(string $value): string
     return str_replace(['\\\\', '\\s', '\\n'], ["\\", ' ', "\n"], $value);
 }
 
-function ping_adc($stream, string $nick, int $started): array
+function ping_adc($stream, string $nick, int $started, array $profile): array
 {
     if (!in_array('tiger192,3', hash_algos(), true)) {
         throw new RuntimeException('Serwer PHP nie obsługuje Tiger/192-3 potrzebnego do ADC.');
@@ -352,7 +363,10 @@ function ping_adc($stream, string $nick, int $started): array
             }
             if (!$sentInfo) {
                 send_all($stream, 'BINF ' . $ownSid . ' ID' . $cid
-                    . ' NI' . $nick . ' DEHublist\\spinger VE1.0 APHublist\\sPHP SS0 SF0 SL1 HN1' . "\n");
+                    . ' NI' . $nick . ' DE' . escape_adc_profile_field($profile['description'])
+                    . ' VE' . escape_adc_profile_field($profile['version'])
+                    . ($profile['email'] !== '' ? ' EM' . escape_adc_profile_field($profile['email']) : '')
+                    . ' APHublist\\sPHP SS0 SF0 SL1 HN1' . "\n");
                 $sentInfo = true;
             }
             continue;
@@ -428,15 +442,15 @@ function ping_adc($stream, string $nick, int $started): array
     ];
 }
 
-function ping_one_hub(array $hub, string $nick): array
+function ping_one_hub(array $hub, string $nick, array $profile): array
 {
     $stream = null;
     try {
         [$stream, $started, $cert] = connect_hub($hub);
         if (in_array($hub['protocol'], ['ADC', 'ADCS'], true)) {
-            $stats = ping_adc($stream, $nick, $started);
+            $stats = ping_adc($stream, $nick, $started, $profile);
         } else {
-            $stats = ping_nmdc($stream, $nick, $started);
+            $stats = ping_nmdc($stream, $nick, $started, $profile);
         }
         [$cert, $fingerprint] = current_certificate($stream);
         return $stats + certificate_metadata($cert, $fingerprint) + [
@@ -492,10 +506,25 @@ function run_pinger(): void
     }
 
     $pdo = db();
-    $settings = $pdo->query("SELECT setting_value FROM app_settings WHERE setting_key='pinger_nick'")->fetchColumn();
-    $nick = preg_replace('/[^A-Za-z0-9_.-]/', '', (string) ($settings ?: 'Hublist-Pinger'));
+    $storedSettings = $pdo->query("SELECT setting_key,setting_value FROM app_settings WHERE setting_key IN
+        ('pinger_nick','pinger_description','pinger_version','pinger_email','pinger_connection','pinger_interval')")
+        ->fetchAll(PDO::FETCH_KEY_PAIR);
+    $nick = preg_replace('/[^A-Za-z0-9_.-]/', '', (string) ($storedSettings['pinger_nick'] ?? 'Hublist-Pinger'));
     if (strlen($nick) < 3) {
         $nick = 'Hublist-Pinger';
+    }
+    $interval = filter_var($storedSettings['pinger_interval'] ?? '48', FILTER_VALIDATE_INT);
+    if ($interval === false || $interval < 5 || $interval > 10080) {
+        throw new RuntimeException('Nieprawidłowy odstęp pingowania w ustawieniach.');
+    }
+    $profile = [
+        'description' => sanitize_nmdc_profile_field((string) ($storedSettings['pinger_description'] ?? 'Hublist pinger')),
+        'version' => sanitize_nmdc_profile_field((string) ($storedSettings['pinger_version'] ?? '1.0')),
+        'email' => sanitize_nmdc_profile_field((string) ($storedSettings['pinger_email'] ?? '')),
+        'connection' => sanitize_nmdc_profile_field((string) ($storedSettings['pinger_connection'] ?? 'DSL')),
+    ];
+    if ($profile['version'] === '') {
+        $profile['version'] = '1.0';
     }
     $limit = 100;
     global $argv;
@@ -505,7 +534,11 @@ function run_pinger(): void
         }
     }
 
-    $hubs = $pdo->query("SELECT * FROM hubs WHERE status='approved' ORDER BY last_ping_at IS NULL DESC, last_ping_at ASC LIMIT $limit")->fetchAll();
+    $hubs = $pdo->query(
+        "SELECT * FROM hubs WHERE status='approved'
+         AND (last_ping_at IS NULL OR last_ping_at <= UTC_TIMESTAMP() - INTERVAL $interval MINUTE)
+         ORDER BY last_ping_at IS NULL DESC, last_ping_at ASC LIMIT $limit"
+    )->fetchAll();
     $update = $pdo->prepare(
         'UPDATE hubs SET pinger_status=?, pinger_error=?, ping_ms=?, last_ping_at=UTC_TIMESTAMP(),
             tls_cert_valid=?, tls_cert_expires=?, tls_cert_issuer=?, tls_fingerprint=?,
@@ -528,7 +561,7 @@ function run_pinger(): void
             fwrite(STDOUT, "Osiągnięto limit czasu jednego przebiegu; pozostałe huby sprawdzi następny cron.\n");
             break;
         }
-        $result = ping_one_hub($hub, $nick);
+        $result = ping_one_hub($hub, $nick, $profile);
         if (($hub['country_source'] ?? null) !== 'manual') {
             try {
                 $ip = public_hub_ip((string) $hub['host']);
