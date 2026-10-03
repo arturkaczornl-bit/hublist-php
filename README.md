@@ -29,7 +29,8 @@ Instalator próbuje zaimportować huby z kilku publicznych źródeł. Zewnętrzn
 ## Panel i funkcje
 
 - `admin.php` — logowanie, moderacja zgłoszeń, zarządzanie hubami i Pobieralnią, edycja pozycji menu, ustawienia pingera, statystyki aktywnych sesji, historia odwiedzin i blokowanie adresów IP;
-- `index.php` — wyszukiwarka hubów z filtrami tekstu/adresu/portu, protokołu NMDC/ADC/TLS, kraju, statusu, serwera, liczby użytkowników, share i certyfikatu; sortowanie po popularności, share, dostępności, pingu, dacie sprawdzenia lub nazwie;
+- `index.php` — strona główna z podsumowaniem katalogu, feedem XML, ostatnimi zgłoszeniami i linkami do poszczególnych działów;
+- `search.php` — osobna wyszukiwarka hubów z filtrami adresu/IP/portu, protokołu, kraju, statusu, serwera, liczby użytkowników, share i TLS; sortowanie po użytkownikach, share, dostępności, pingu, czasie sprawdzenia lub nazwie;
 - `stats.php` — publiczny ranking dostępności hubów w ostatnich 30 dniach z liczbą pomiarów i czasem ostatniego sprawdzenia przez pingera;
 - `visitor_ping.php` — odświeżanie aktywności sesji odwiedzającego bez dopisywania kolejnego wejścia do historii;
 

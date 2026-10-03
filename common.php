@@ -74,6 +74,7 @@ function upgrade_navigation_menu(PDO $pdo): void
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $items = [
         ['home', 'Hublista', 'index.php', 10],
+        ['search', 'Wyszukiwarka', 'search.php', 15],
         ['stats', 'Statystyki', 'stats.php', 20],
         ['add_hub', 'Dodaj hub', 'add_hub.php', 30],
         ['download', 'Pobieralnia', 'download.php', 40],
