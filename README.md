@@ -46,7 +46,7 @@ Wklej pełny URL jako adres listy hubów w ustawieniach klienta. Jeśli hosting 
 
 ## Katalog oprogramowania
 
-Katalog zawiera wybrane linki do klientów, serwerów hubów, skryptów i narzędzi, m.in. AirDC++, DC++, EiskaltDC++, FlylinkDC++, Jucy, ShakesPeer, ncdc, archiwalny ApexDC++, Verlihub, ADCH++, µHub (uhub), PtokaX i repozytoriów Lua. To kuratorska lista odnośników, a nie kopia ani gwarantowany spis wszystkich dawnych i aktualnych wydań. Projekty społecznościowe lub archiwalne są oznaczone opisem; przed pobraniem i uruchomieniem sprawdź autora, aktualność, licencję i kod. ncdc jest utrzymywany pasywnie, a ApexDC++ to projekt archiwalny. PtokaX ma obecnie oficjalną stronę HTTP bez szyfrowania — zachowaj szczególną ostrożność przy pobieraniu z tego źródła.
+Katalog zawiera wybrane linki do klientów, serwerów hubów, skryptów i narzędzi, m.in. AirDC++, DC++, EiskaltDC++, FlylinkDC++, Jucy, ShakesPeer, ncdc, archiwalny ApexDC++, Open Direct Connect, Verlihub, ADCH++, µHub (uhub), Luadch, Luadch-ng, go-dcpp, archiwalny YnHub, PtokaX i repozytoriów Lua. To kuratorska lista odnośników, a nie kopia ani gwarantowany spis wszystkich dawnych i aktualnych wydań. Projekty społecznościowe lub archiwalne są oznaczone opisem; przed pobraniem i uruchomieniem sprawdź autora, aktualność, licencję i kod. ncdc jest utrzymywany pasywnie, ApexDC++ i YnHub są projektami archiwalnymi, a wpis Open Direct Connect ma charakter historyczny i nie wskazuje zweryfikowanego pliku do pobrania. PtokaX ma obecnie oficjalną stronę HTTP bez szyfrowania — zachowaj szczególną ostrożność przy pobieraniu z tego źródła.
 
 ## Cron — uruchamianie co 48 minut
 
