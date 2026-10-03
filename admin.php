@@ -244,7 +244,7 @@ if (!admin_logged_in()) {
     ?>
     <main><section class="panel" style="max-width:520px;margin:48px auto">
         <h1>Panel administratora</h1>
-        <p class="muted">Zaloguj się, aby zatwierdzać zgłoszenia, zarządzać hubami i edytować katalog download.</p>
+        <p class="muted">Zaloguj się, aby zatwierdzać zgłoszenia, zarządzać hubami i edytować Pobieralnię.</p>
         <?php if ($error !== ''): ?><p class="error"><?= e($error) ?></p><?php endif; ?>
         <form method="post" class="grid">
             <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="action" value="login">
@@ -289,7 +289,7 @@ page_start('Panel administracyjny');
         <nav class="nav">
             <a href="?tab=pending">Oczekujące (<?= count($pending) ?>)</a>
             <a href="?tab=hubs">Huby</a>
-            <a href="?tab=downloads">Download</a>
+            <a href="?tab=downloads">Pobieralnia</a>
             <a href="?tab=settings">Ustawienia</a>
         </nav>
         <form method="post" style="justify-content:flex-end">
@@ -361,7 +361,7 @@ page_start('Panel administracyjny');
             <?php render_download_fields(); ?>
             <div class="field full"><button type="submit">Dodaj do katalogu</button></div>
         </form></section>
-        <section class="panel"><h2>Katalog download</h2><div class="table-wrap"><table>
+        <section class="panel"><h2>Katalog pobieralni</h2><div class="table-wrap"><table>
         <thead><tr><th>Kategoria</th><th>Nazwa i wersja</th><th>Oficjalny link</th><th>Kliknięcia pobrania</th><th>Akcje</th></tr></thead><tbody>
         <?php foreach ($downloadRows as $item): ?><tr>
             <td><?= e($downloadCategories[$item['category']] ?? $item['category']) ?></td>

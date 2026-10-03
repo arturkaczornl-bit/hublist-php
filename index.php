@@ -111,14 +111,16 @@ $pending = $pendingStmt->fetchAll();
 page_start('Publiczna lista hubów Direct Connect');
 ?>
 <main>
-    <section class="hero">
-        <h1>Publiczna lista hubów Direct Connect</h1>
-        <p>Huby ADC, ADCS, DCHUB, NMDC i NMDCS. Własny pinger, monitoring certyfikatów TLS, historia dostępności i katalog klientów oraz serwerów.</p>
+    <section class="hero home-hero">
+        <span class="hero-kicker">Polska hublista Direct Connect · Hublist.pl</span>
+        <h1>Polska hublista Direct Connect</h1>
+        <p>Łączymy polską społeczność Direct Connect. Znajdź hub, sprawdź jego status i dołącz do rozmów, wymiany legalnych plików oraz wspólnych zainteresowań.</p>
         <div class="actions" style="margin-top:14px">
             <a class="button" href="hublist.xml" download>Pobierz listę XML</a>
             <a class="button secondary" href="hublist.xml.bz2" download>Pobierz XML BZip2 (.bz2)</a>
             <a class="button secondary" href="#zglos-hub">Dodaj hub</a>
         </div>
+        <p class="note" style="margin-top:16px">Polska społeczność DC — otwarte huby, sprawdzony status i lista gotowa dla Twojego klienta.</p>
     </section>
     <section class="panel" id="feed">
         <h2>Dodaj tę hublistę do klienta Direct Connect</h2>
@@ -236,13 +238,13 @@ page_start('Publiczna lista hubów Direct Connect');
     </section>
 
     <section class="panel" id="download">
-        <h2>Download — klienci, huby, skrypty i narzędzia</h2>
+        <h2>Pobieralnia — klienci, huby, skrypty i narzędzia</h2>
         <p>Przejdź do katalogu pobierania: serwery hubów, klienci Direct Connect, skrypty Lua oraz inne narzędzia.</p>
         <div class="actions">
             <?php foreach (download_categories() as $category => $label): ?>
                 <a class="button secondary" href="download.php?category=<?= e($category) ?>"><?= e($label) ?></a>
             <?php endforeach; ?>
-            <a class="button" href="download.php">Zobacz cały katalog</a>
+            <a class="button" href="download.php">Otwórz pobieralnię</a>
         </div>
     </section>
 </main>

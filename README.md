@@ -1,6 +1,6 @@
-# Hublist PHP
+# Hublist.pl — polska hublista Direct Connect
 
-Niezależna hublista Direct Connect w PHP i MySQL. Użytkownicy mogą zgłaszać huby, administrator je moderuje, a własny pinger sprawdza zatwierdzone wpisy. Aplikacja ma też edytowalny katalog klientów DC i oprogramowania serwerowego.
+Polska hublista Direct Connect pod domenę `hublist.pl`, napisana w PHP i MySQL. Użytkownicy mogą zgłaszać huby, administrator je moderuje, a własny pinger sprawdza zatwierdzone wpisy. Aplikacja ma też edytowalną Pobieralnię klientów DC i oprogramowania serwerowego.
 
 ## Wymagania
 
@@ -16,7 +16,7 @@ Composer nie jest wymagany. Rozszerzenie BZip2 jest potrzebne do pobierania skom
 
 1. Wgraj pliki aplikacji do katalogu strony WWW.
 2. Utwórz pustą bazę MySQL i osobnego użytkownika z prawami do tworzenia tabel oraz zapisu.
-3. Otwórz `https://twoja-domena/setup.php`, podaj dane bazy, nazwę administratora i mocne hasło (co najmniej 14 znaków).
+3. Skieruj domenę `hublist.pl` na hosting, włącz HTTPS i otwórz `https://hublist.pl/setup.php`; podaj dane bazy, nazwę administratora i mocne hasło (co najmniej 14 znaków).
 4. Zaloguj się przez `admin.php`, sprawdź wpisy importowane do moderacji i zatwierdź te, które mają być publiczne.
 5. Po instalacji usuń `setup.php` z serwera. Zachowaj `config.php` poza publicznym repozytorium; `.htaccess` blokuje bezpośredni dostęp do tego pliku na Apache.
 
@@ -30,7 +30,7 @@ Instalator próbuje zaimportować huby z kilku publicznych źródeł. Zewnętrzn
 - `hublist.xml` i `hublist.xml.bz2` — pobieralny feed zatwierdzonych hubów, do użycia w ustawieniach klienta DC. Warianty bez mod_rewrite są dostępne przez `feed.php?format=xml` i `feed.php?format=bz2`;
 - `about.php`, `faq.php` i `rules.php` — informacja o serwisie, przewodnik po Direct Connect i zasady katalogu;
 - publiczny formularz zgłoszenia — zgłoszenie pozostaje ukryte do zatwierdzenia; strona pokazuje maksymalnie pięć najnowszych oczekujących;
-- `download.php` — katalog download z kategoriami, opisami i linkami zarządzanymi z panelu; administrator może edytować nazwy/opisy kategorii, dodawać nowe kategorie i pozycje, zmieniać linki oraz usuwać wpisy. Kliknięcia przycisków pobierania są liczone i widoczne publicznie oraz w administracji. Licznik odzwierciedla kliknięcia/przekierowania, nie potwierdza zakończenia pobrania z zewnętrznej strony;
+- `download.php` — publiczna Pobieralnia z kategoriami, opisami i linkami zarządzanymi z panelu; administrator może edytować nazwy/opisy kategorii, dodawać nowe kategorie i pozycje, zmieniać linki oraz usuwać wpisy. Kliknięcia przycisków pobierania są liczone i widoczne publicznie oraz w administracji. Licznik odzwierciedla kliknięcia/przekierowania, nie potwierdza zakończenia pobrania z zewnętrznej strony;
 - `imports.php` — ręczny import dostępnych feedów do moderacji;
 - `pinger.php` — skrypt CLI, loguje się pod skonfigurowanym nickiem (bot jest widoczny na hubie), sprawdza NMDC/ADC oraz TLS i zapisuje historię. Jeśli kraj nie został ustawiony ręcznie, pinger geolokalizuje publiczny adres IP przez usługę `ipwho.is` i zapisuje kod kraju oraz użyty adres IP. Oznacza to przekazanie adresu IP hosta usłudze geolokalizacyjnej; lokalizacja IP jest przybliżona. Huby wymagające hasła lub odrzucające pingera nie będą omijane; ich stan będzie pokazany jako błąd.
 
@@ -38,12 +38,12 @@ Pinger nie gwarantuje danych, których hub nie udostępnia. Brak statystyki pozo
 
 ## Feed dla klientów Direct Connect
 
-Na stronie głównej są dostępne bezpośrednie adresy:
+Na stronie głównej Hublist.pl są dostępne bezpośrednie adresy:
 
-- `https://twoja-domena/hublist.xml` — XML zgodny ze strukturą używaną przez popularne klienty DC;
-- `https://twoja-domena/hublist.xml.bz2` — ten sam feed skompresowany BZip2.
+- `https://hublist.pl/hublist.xml` — XML zgodny ze strukturą używaną przez popularne klienty DC;
+- `https://hublist.pl/hublist.xml.bz2` — ten sam feed skompresowany BZip2.
 
-Wklej pełny URL jako adres listy hubów w ustawieniach klienta. Jeśli hosting nie ma włączonego mod_rewrite, użyj `https://twoja-domena/feed.php?format=xml` albo `https://twoja-domena/feed.php?format=bz2`. Feed obejmuje wyłącznie zatwierdzone huby.
+Wklej pełny URL jako adres listy hubów w ustawieniach klienta. Jeśli hosting nie ma włączonego mod_rewrite, użyj `https://hublist.pl/feed.php?format=xml` albo `https://hublist.pl/feed.php?format=bz2`. Feed obejmuje wyłącznie zatwierdzone huby.
 
 ## Katalog oprogramowania
 
@@ -75,3 +75,5 @@ Cron używa strefy czasowej serwera. Ścieżkę do PHP CLI oraz katalogu strony 
 ## Licencja
 
 MIT — zobacz plik [LICENSE](LICENSE).
+
+Kod źródłowy jest udostępniony na warunkach licencji MIT. Odrębne prawa do oryginalnych treści redakcyjnych, logo i projektu graficznego Hublist.pl nie zmieniają licencji ani praw do komponentów osób trzecich.

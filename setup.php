@@ -293,13 +293,13 @@ if (!isset($_SESSION['setup_csrf'])) {
 <html lang="pl">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Instalacja Hublist</title>
+<title>Instalacja Hublist.pl</title>
 <style>
 body{margin:0;background:#f2f5f9;color:#162338;font:16px/1.5 system-ui,sans-serif}.box{max-width:650px;margin:36px auto;padding:24px;background:#fff;border:1px solid #dce4ee;border-radius:12px}h1{margin-top:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.wide{grid-column:1/-1}label{display:grid;gap:4px;font-weight:600}input{font:inherit;padding:10px;border:1px solid #aebaca;border-radius:7px}button{margin-top:16px;border:0;border-radius:7px;padding:11px 16px;background:#165dbe;color:#fff;font:inherit;cursor:pointer}.error{padding:10px;background:#fff0ef;border-left:4px solid #a32626}small{color:#65758b}@media(max-width:600px){.box{margin:12px;padding:18px}.grid{grid-template-columns:1fr}.wide{grid-column:auto}}
 </style>
 </head>
 <body><main class="box">
-<h1>Konfiguracja Hublist</h1>
+<h1>Konfiguracja Hublist.pl</h1>
 <p>Wprowadź dane bazy MySQL z panelu hostingu i utwórz konto administratora. Hasło administratora zostanie zapisane jako bezpieczny hash.</p>
 <?php if ($error !== ''): ?><p class="error"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p><?php endif; ?>
 <form method="post">
@@ -313,5 +313,5 @@ body{margin:0;background:#f2f5f9;color:#162338;font:16px/1.5 system-ui,sans-seri
 <label>Login administratora<input name="admin_user" required minlength="3" maxlength="64" autocomplete="username"></label>
 <label>Hasło administratora<input name="admin_password" type="password" required minlength="14" maxlength="72" autocomplete="new-password"><small>Minimum 14 znaków. Zachowaj je w menedżerze haseł.</small></label>
 <label class="wide">Powtórz hasło administratora<input name="admin_confirm" type="password" required minlength="14" maxlength="72" autocomplete="new-password"></label>
-</div><button type="submit">Zainstaluj Hublist</button></form>
+</div><button type="submit">Zainstaluj Hublist.pl</button></form>
 </main></body></html>

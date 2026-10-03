@@ -61,11 +61,11 @@ foreach ($items as $item) {
     }
 }
 
-page_start('Download — programy Direct Connect');
+page_start('Pobieralnia — programy Direct Connect');
 ?>
 <main>
     <section class="hero">
-        <h1>Download — oprogramowanie Direct Connect</h1>
+        <h1>Pobieralnia — programy Direct Connect</h1>
         <p>Katalog zawiera odnośniki do stron projektów i wydań. Nie przechowujemy kopii zewnętrznych instalatorów ani skryptów.</p>
     </section>
     <section class="panel">
@@ -95,7 +95,7 @@ page_start('Download — programy Direct Connect');
                             <small><?= e($item['version'] ?: $item['platform'] ?: $label) ?></small>
                             <p><?= e($item['description'] ?: '') ?></p>
                             <p class="muted">Kliknięcia pobrania: <?= number_format((int) $item['download_count'], 0, ',', ' ') ?></p>
-                            <a class="button secondary" href="download.php?id=<?= (int) $item['id'] ?>" target="_blank" rel="noopener noreferrer nofollow">Otwórz stronę projektu / pobierania</a>
+                            <a class="button secondary" href="download.php?id=<?= (int) $item['id'] ?>" target="_blank" rel="noopener noreferrer nofollow">Odwiedź stronę projektu / pobierania</a>
                         </article>
                     <?php endforeach; ?>
                 </div>

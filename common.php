@@ -510,6 +510,22 @@ function security_headers(): void
 function page_start(string $title): void
 {
     security_headers();
+    $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'index.php'));
+    $canonicalPath = $script === 'index.php' ? '/' : '/' . rawurlencode($script);
+    $canonicalParams = [];
+    if ($script === 'hub.php') {
+        $hubId = filter_var(is_string($_GET['id'] ?? null) ? $_GET['id'] : '', FILTER_VALIDATE_INT);
+        if ($hubId && $hubId > 0) {
+            $canonicalParams['id'] = $hubId;
+        }
+    } elseif ($script === 'download.php') {
+        $category = is_string($_GET['category'] ?? null) ? $_GET['category'] : '';
+        if ($category !== '' && array_key_exists($category, download_categories())) {
+            $canonicalParams['category'] = $category;
+        }
+    }
+    $canonicalUrl = 'https://hublist.pl' . $canonicalPath
+        . ($canonicalParams !== [] ? '?' . http_build_query($canonicalParams) : '');
     ?>
     <!doctype html>
     <html lang="pl">
@@ -518,30 +534,32 @@ function page_start(string $title): void
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="description" content="Niezależna lista hubów Direct Connect ADC i NMDC z własnym pingerem i pełnymi statystykami.">
         <link rel="alternate" type="application/xml" href="feed.php?format=xml">
-        <title><?= e($title) ?> — Hublist</title>
+        <meta name="theme-color" content="#102944">
+            <link rel="canonical" href="<?= e($canonicalUrl) ?>">
+            <title><?= e($title) ?> — Hublist.pl</title>
         <style>
-            :root{color-scheme:light;--ink:#162338;--muted:#65758b;--line:#dce4ee;--paper:#fff;--bg:#f2f5f9;--blue:#165dbe;--green:#147341;--amber:#855700;--red:#a32626}
+            :root{color-scheme:light;--ink:#162338;--muted:#65758b;--line:#dce4ee;--paper:#fff;--bg:#f2f5f9;--blue:#174f7b;--green:#147341;--amber:#855700;--red:#b42332;--poland-red:#d4213d}
             *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
-            a{color:var(--blue)}.top{background:#102944;color:#fff}.top-inner,main,footer{width:min(1240px,100% - 32px);margin-inline:auto}
-            .top-inner{padding:20px 0;display:flex;justify-content:space-between;align-items:center;gap:20px}.brand{font-weight:800;font-size:1.45rem;color:#fff;text-decoration:none;letter-spacing:.02em}.nav{display:flex;gap:18px;flex-wrap:wrap}.nav a{color:#e6eef8;text-decoration:none}
+            a{color:var(--blue)}.top{background:#102944;color:#fff;border-bottom:3px solid var(--poland-red)}.top-inner,main,footer{width:min(1240px,100% - 32px);margin-inline:auto}
+            .top-inner{padding:16px 0;display:flex;justify-content:space-between;align-items:center;gap:20px}.brand{display:inline-flex;align-items:center;gap:10px;font-weight:850;font-size:1.45rem;color:#fff;text-decoration:none;letter-spacing:.01em}.brand-mark{position:relative;display:inline-block;width:30px;height:22px;border-radius:4px;background:linear-gradient(to bottom,#fff 0 50%,var(--poland-red) 50% 100%);box-shadow:0 0 0 1px #ffffff77;transform:skew(-8deg)}.brand-mark:after{content:"";position:absolute;left:8px;right:8px;top:5px;height:12px;border-left:2px solid #173653;border-right:2px solid #173653;opacity:.9}.brand-domain{color:#f1b4bf;font-weight:650}.nav{display:flex;gap:18px;flex-wrap:wrap}.nav a{color:#e6eef8;text-decoration:none}.nav a:hover{color:#fff;text-decoration:underline;text-decoration-color:var(--poland-red);text-decoration-thickness:2px;text-underline-offset:5px}
             main{padding-top:24px;padding-bottom:48px}h1{font-size:clamp(1.7rem,4vw,2.5rem);line-height:1.2;margin:.1rem 0 .45rem}h2{margin:0 0 12px;font-size:1.2rem}
-            .hero{padding:22px 0 18px}.hero p{color:var(--muted);margin:0}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+            .hero{padding:22px 0 18px}.hero p{color:var(--muted);margin:0}.home-hero{position:relative;overflow:hidden;margin-top:2px;padding:24px 26px;border:1px solid var(--line);border-radius:13px;background:linear-gradient(110deg,#fff 0%,#fff 76%,#fff3f5 100%)}.home-hero:after{content:"";position:absolute;right:0;top:0;width:9px;height:100%;background:linear-gradient(to bottom,#fff 0 50%,var(--poland-red) 50% 100%)}.hero-kicker{display:inline-flex;align-items:center;gap:8px;margin-bottom:8px;color:#7c2639;font-size:.75rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase}.hero-kicker:before{content:"";width:22px;height:14px;border-radius:2px;background:linear-gradient(to bottom,#fff 0 50%,var(--poland-red) 50% 100%);box-shadow:0 0 0 1px #d7dce4}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
             .card,.panel{border:1px solid var(--line);border-radius:12px;background:var(--paper)}.card{padding:14px 16px}.card strong{display:block;font-size:1.65rem}.muted,small{color:var(--muted)}
             .panel{padding:18px;margin:14px 0}.actions,form{display:flex;gap:9px;flex-wrap:wrap;align-items:center}input,select,textarea{font:inherit;border:1px solid #bac5d3;border-radius:7px;background:#fff;padding:9px 11px;min-height:42px;color:var(--ink)}input[type=search]{flex:1 1 240px}textarea{width:100%;min-height:92px}button,.button{display:inline-block;border:1px solid var(--blue);border-radius:7px;background:var(--blue);color:white;padding:9px 14px;font:inherit;text-decoration:none;cursor:pointer}.button.secondary,button.secondary{background:white;color:var(--blue)}
             .table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;min-width:1050px}th,td{padding:10px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{font-size:.8rem;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}td small{display:block}.proto,.pill{display:inline-block;border-radius:20px;background:#eaf0f8;color:#233b5d;padding:2px 8px;font-size:.8rem;font-weight:650;white-space:nowrap}.ok{color:var(--green);font-weight:700}.bad{color:var(--red);font-weight:700}.wait{color:var(--amber);font-weight:700}.address{font-family:ui-monospace,monospace;overflow-wrap:anywhere}.detail{margin-top:2px}.note{padding:11px 14px;background:#fff8e7;border-left:4px solid #d1a23b;border-radius:4px}.error{padding:11px 14px;background:#fff0ef;border-left:4px solid var(--red);border-radius:4px}.success{padding:11px 14px;background:#edf9f1;border-left:4px solid var(--green);border-radius:4px}
             .hub-flag{font-size:1.25rem;vertical-align:middle;margin-right:5px}.hub-name{font-weight:750;text-decoration:none;color:var(--ink)}.hub-name:hover{text-decoration:underline}.status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 7px 0 1px;vertical-align:middle}.status-dot.is-online{background:#19a35b;box-shadow:0 0 0 3px #e4f5eb}.status-dot.is-offline{background:#d43b3b;box-shadow:0 0 0 3px #fdeaea}.protocol-icon{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:4px 7px;font-size:.76rem;font-weight:750;white-space:nowrap}.protocol-adc{background:#e8f3ff;color:#14588d}.protocol-adcs{background:#e9edff;color:#3d4d9e}.protocol-dchub{background:#fff1dc;color:#87540d}.protocol-nmdc{background:#e9f6ec;color:#27633a}.protocol-nmdcs{background:#f2e9ff;color:#653a92}.hub-icon{width:76px;height:76px;border-radius:14px;object-fit:cover;border:1px solid var(--line);background:#eaf0f8}.hub-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.hub-detail{border:1px solid var(--line);border-radius:9px;padding:12px}.hub-detail strong{display:block;font-size:.78rem;color:var(--muted);margin-bottom:4px}.hub-detail span{overflow-wrap:anywhere}.topic{font-size:1.1rem;padding:15px;background:#f5f8fb;border-radius:9px}
-            .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:grid;gap:4px}.field.full{grid-column:1/-1}.downloads{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}.download{border:1px solid var(--line);border-radius:10px;padding:15px}.download h3{margin:0}.empty{padding:15px;color:var(--muted)}.pager{display:flex;justify-content:center;gap:16px;padding-top:16px}.pager a{text-decoration:none;font-weight:650}footer{padding:0 0 26px;color:var(--muted);font-size:.9rem}
+            .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:grid;gap:4px}.field.full{grid-column:1/-1}.downloads{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}.download{border:1px solid var(--line);border-radius:10px;padding:15px}.download h3{margin:0}.empty{padding:15px;color:var(--muted)}.pager{display:flex;justify-content:center;gap:16px;padding-top:16px}.pager a{text-decoration:none;font-weight:650}footer{padding:0 0 26px;color:var(--muted);font-size:.9rem}.footer-brand{border-top:1px solid var(--line);padding-top:15px}.footer-rights{font-size:.82rem}.footer-rights strong{color:var(--ink)}
             @media(max-width:760px){.top-inner{align-items:flex-start;flex-direction:column}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid,.hub-detail-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
         </style>
     </head>
-    <body><div class="top"><div class="top-inner"><a class="brand" href="index.php">Hublist</a><nav class="nav" aria-label="Menu główne"><a href="index.php">Hublista</a><a href="index.php#zglos-hub">Dodaj hub</a><a href="download.php">Download</a><a href="feed.php?format=xml">Feed XML</a><a href="about.php">O nas</a><a href="faq.php">FAQ</a><a href="rules.php">Regulamin</a><a href="admin.php">Administracja</a></nav></div></div>
+    <body><div class="top"><div class="top-inner"><a class="brand" href="index.php" aria-label="Hublist.pl — polska hublista Direct Connect"><span class="brand-mark" aria-hidden="true"></span><span>Hublist<span class="brand-domain">.pl</span></span></a><nav class="nav" aria-label="Menu główne"><a href="index.php">Hublista</a><a href="index.php#zglos-hub">Dodaj hub</a><a href="download.php">Pobieralnia</a><a href="feed.php?format=xml">Feed XML</a><a href="about.php">O nas</a><a href="faq.php">FAQ</a><a href="rules.php">Regulamin</a><a href="admin.php">Administracja</a></nav></div></div>
     <?php
 }
 
 function page_end(): void
 {
     ?>
-    <footer><p>Hublist pomaga znaleźć publiczne huby Direct Connect i udostępnia ich feed klientom DC. Status oraz linki do zewnętrznych programów mogą się zmieniać.</p><p><a href="about.php">O serwisie</a> · <a href="faq.php">FAQ</a> · <a href="rules.php">Regulamin</a> · <a href="download.php">Download</a> · <a href="admin.php">Administracja</a></p></footer>
+    <footer><div class="footer-brand"><p><strong>Hublist.pl</strong> — polska hublista Direct Connect. Łączymy społeczność, promujemy otwarte huby i wspieramy polską scenę DC.</p><p><a href="about.php">O serwisie</a> · <a href="faq.php">FAQ</a> · <a href="rules.php">Regulamin</a> · <a href="download.php">Pobieralnia</a> · <a href="admin.php">Administracja</a></p><p class="footer-rights">© <?= date('Y') ?> Hublist.pl. <strong>Wszelkie prawa zastrzeżone</strong> do oryginalnych treści, projektu graficznego, logo i układu serwisu. Kopiowanie lub ponowne publikowanie całości serwisu albo jego istotnych części wymaga zgody administratora. Nazwy, znaki i oprogramowanie podmiotów trzecich należą do ich właścicieli.</p></div></footer>
     </body></html>
     <?php
 }

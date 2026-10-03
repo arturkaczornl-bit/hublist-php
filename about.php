@@ -2,12 +2,12 @@
 declare(strict_types=1);
 
 require __DIR__ . '/common.php';
-page_start('O serwisie Hublist');
+page_start('O serwisie Hublist.pl');
 ?>
 <main>
     <section class="hero">
-        <h1>O serwisie Hublist</h1>
-        <p>Niezależny katalog publicznych hubów sieci Direct Connect oraz źródło feedu XML dla klientów DC.</p>
+        <h1>O serwisie Hublist.pl</h1>
+        <p>Polska hublista Direct Connect — niezależny katalog publicznych hubów i źródło feedu XML dla klientów DC.</p>
     </section>
     <section class="panel">
         <h2>Co to jest hublista?</h2>
@@ -22,7 +22,7 @@ page_start('O serwisie Hublist');
     <section class="panel">
         <h2>Dodawanie i używanie listy</h2>
         <ol>
-            <li>Wybierz klienta DC w <a href="download.php?category=client">katalogu klientów</a> i zainstaluj go ze strony projektu.</li>
+            <li>Wybierz klienta DC w <a href="download.php?category=client">Pobieralni</a> i zainstaluj go ze strony projektu.</li>
             <li>Otwórz ustawienia list hubów w kliencie i dodaj URL feedu XML: <a href="hublist.xml">hublist.xml</a>. Wiele klientów potrafi również pobierać skompresowany feed: <a href="hublist.xml.bz2">hublist.xml.bz2</a>.</li>
             <li>Wybierz hub i połącz się jego adresem. Przestrzegaj zasad danego huba.</li>
         </ol>

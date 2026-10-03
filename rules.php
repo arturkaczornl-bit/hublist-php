@@ -2,16 +2,16 @@
 declare(strict_types=1);
 
 require __DIR__ . '/common.php';
-page_start('Regulamin serwisu');
+page_start('Regulamin Hublist.pl');
 ?>
 <main>
     <section class="hero">
-        <h1>Regulamin serwisu Hublist</h1>
+        <h1>Regulamin serwisu Hublist.pl</h1>
         <p>Zasady korzystania z katalogu, zgłoszeń i publikowanych odnośników.</p>
     </section>
     <section class="panel">
         <h2>1. Zakres serwisu</h2>
-        <p>Hublist jest katalogiem informacyjnym i źródłem feedu adresów publicznych hubów Direct Connect. Nie jest operatorem wymienionych hubów, siecią P2P, hostingiem plików ani dostawcą zewnętrznych programów.</p>
+        <p>Hublist.pl jest katalogiem informacyjnym i źródłem feedu adresów publicznych hubów Direct Connect. Nie jest operatorem wymienionych hubów, siecią P2P, hostingiem plików ani dostawcą zewnętrznych programów.</p>
     </section>
     <section class="panel">
         <h2>2. Legalne i odpowiedzialne używanie P2P</h2>
@@ -46,7 +46,11 @@ page_start('Regulamin serwisu');
     </section>
     <section class="panel">
         <h2>7. Zgłoszenia problemów</h2>
-        <p>W sprawie nieprawidłowego wpisu, naruszenia praw lub bezpieczeństwa skontaktuj się z administratorem strony przez kanał kontaktowy udostępniony na jej stronie głównej. Ten regulamin dotyczy serwisu Hublist; nie zastępuje regulaminu huba ani porady prawnej.</p>
+        <p>W sprawie nieprawidłowego wpisu, naruszenia praw lub bezpieczeństwa skontaktuj się z administratorem strony przez kanał kontaktowy udostępniony na jej stronie głównej. Ten regulamin dotyczy serwisu Hublist.pl; nie zastępuje regulaminu huba ani porady prawnej.</p>
+    </section>
+    <section class="panel">
+        <h2>8. Prawa do serwisu</h2>
+        <p>Oryginalne teksty, projekt graficzny, logo i układ serwisu Hublist.pl są chronione prawem. Bez zgody administratora nie wolno kopiować ani ponownie publikować całości serwisu lub jego istotnych części. Nie dotyczy to nazw, znaków towarowych, opisów ani oprogramowania należących do osób trzecich — pozostają one własnością odpowiednich właścicieli.</p>
     </section>
 </main>
 <?php page_end(); ?>

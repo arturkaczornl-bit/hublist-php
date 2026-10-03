@@ -20,7 +20,7 @@ page_start('FAQ — Direct Connect');
     <section class="panel">
         <h2>Jak połączyć się z hubem?</h2>
         <ol>
-            <li>Zainstaluj klienta Direct Connect z <a href="download.php?category=client">katalogu programów</a>.</li>
+            <li>Zainstaluj klienta Direct Connect z <a href="download.php?category=client">Pobieralni</a>.</li>
             <li>Dodaj feed XML w ustawieniach list hubów albo kliknij adres huba, jeśli przeglądarka pozwala otworzyć go w kliencie DC.</li>
             <li>W razie potrzeby ustaw nick, skonfiguruj sieć/firewall zgodnie z instrukcją klienta i zaakceptuj zasady huba.</li>
         </ol>
