@@ -37,12 +37,24 @@ function db(): PDO
 
 function download_categories(): array
 {
-    return [
-        'server' => 'Serwery hubów',
-        'client' => 'Klienci Direct Connect',
-        'script' => 'Skrypty Lua i dodatki',
-        'other' => 'Inne narzędzia',
-    ];
+    $categories = [];
+    foreach (download_category_details() as $category) {
+        $categories[$category['category_key']] = $category['name'];
+    }
+    return $categories;
+}
+
+function download_category_details(): array
+{
+    return db()->query('SELECT category_key,name,description,sort_order FROM download_categories ORDER BY sort_order,name')->fetchAll();
+}
+
+function safe_download_url(string $url): bool
+{
+    $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+    $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+    return filter_var($url, FILTER_VALIDATE_URL) !== false
+        && ($scheme === 'https' || ($scheme === 'http' && $host === 'www.ptokax.org'));
 }
 
 function upgrade_download_catalog(PDO $pdo): void
@@ -60,6 +72,28 @@ function upgrade_download_catalog(PDO $pdo): void
     $column = $pdo->query("SHOW COLUMNS FROM downloads LIKE 'category'")->fetch();
     if (is_array($column) && str_starts_with(strtolower((string) $column['Type']), 'enum(')) {
         $pdo->exec("ALTER TABLE downloads MODIFY category VARCHAR(24) NOT NULL DEFAULT 'client'");
+    }
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS download_categories (
+        category_key VARCHAR(24) NOT NULL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        description TEXT NULL,
+        sort_order INT NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $countColumn = $pdo->query("SHOW COLUMNS FROM downloads LIKE 'download_count'")->fetch();
+    if (!is_array($countColumn)) {
+        $pdo->exec('ALTER TABLE downloads ADD download_count BIGINT UNSIGNED NOT NULL DEFAULT 0');
+    }
+    $seedCategories = [
+        ['server', 'Serwery hubów', 'Oprogramowanie do uruchamiania serwerów Direct Connect.', 10],
+        ['client', 'Klienci Direct Connect', 'Klienty do łączenia się z hubami Direct Connect.', 20],
+        ['script', 'Skrypty Lua i dodatki', 'Skrypty, rozszerzenia i dodatki do klientów oraz serwerów.', 30],
+        ['other', 'Inne narzędzia', 'Pozostałe narzędzia związane z Direct Connect.', 40],
+    ];
+    $seedCategory = $pdo->prepare('INSERT IGNORE INTO download_categories (category_key,name,description,sort_order) VALUES (?,?,?,?)');
+    foreach ($seedCategories as $seed) {
+        $seedCategory->execute($seed);
     }
 
     $marker = $pdo->query("SELECT setting_value FROM app_settings WHERE setting_key='catalog_categories_v6'")->fetchColumn();

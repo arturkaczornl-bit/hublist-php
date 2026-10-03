@@ -29,7 +29,7 @@ Instalator próbuje zaimportować huby z kilku publicznych źródeł. Zewnętrzn
 - `hublist.xml` i `hublist.xml.bz2` — pobieralny feed zatwierdzonych hubów, do użycia w ustawieniach klienta DC. Warianty bez mod_rewrite są dostępne przez `feed.php?format=xml` i `feed.php?format=bz2`;
 - `about.php`, `faq.php` i `rules.php` — informacja o serwisie, przewodnik po Direct Connect i zasady katalogu;
 - publiczny formularz zgłoszenia — zgłoszenie pozostaje ukryte do zatwierdzenia; strona pokazuje maksymalnie pięć najnowszych oczekujących;
-- `download.php` — kategorie serwerów hubów, klientów, skryptów Lua i innych narzędzi; linki do wydań są edytowalne w panelu i prowadzą do stron projektów, nie do kopii plików;
+- `download.php` — katalog download z kategoriami, opisami i linkami zarządzanymi z panelu; administrator może edytować nazwy/opisy kategorii, dodawać nowe kategorie i pozycje, zmieniać linki oraz usuwać wpisy. Kliknięcia przycisków pobierania są liczone i widoczne publicznie oraz w administracji. Licznik odzwierciedla kliknięcia/przekierowania, nie potwierdza zakończenia pobrania z zewnętrznej strony;
 - `imports.php` — ręczny import dostępnych feedów do moderacji;
 - `pinger.php` — skrypt CLI, loguje się pod skonfigurowanym nickiem (bot jest widoczny na hubie), sprawdza NMDC/ADC oraz TLS i zapisuje historię. Huby wymagające hasła lub odrzucające pingera nie będą omijane; ich stan będzie pokazany jako błąd.
 

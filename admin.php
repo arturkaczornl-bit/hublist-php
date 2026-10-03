@@ -125,10 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $descriptionLength = utf8_length($description);
                 $websiteLength = utf8_length($website);
                 $platformLength = utf8_length($platform);
-                $websiteScheme = strtolower((string) parse_url($website, PHP_URL_SCHEME));
-                $websiteHost = strtolower((string) parse_url($website, PHP_URL_HOST));
-                $safeWebsite = filter_var($website, FILTER_VALIDATE_URL)
-                    && ($websiteScheme === 'https' || ($websiteScheme === 'http' && $websiteHost === 'www.ptokax.org'));
+                $safeWebsite = safe_download_url($website);
                 if ($id === false) {
                     throw new InvalidArgumentException('Nieprawidłowy identyfikator katalogu.');
                 }
@@ -150,6 +147,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute([$category, $name, $version ?: null, $description ?: null, $website, $platform ?: null, $order]);
                     $notice = 'Wpis katalogu został dodany.';
                 }
+            } elseif ($action === 'save_download_category') {
+                $key = trim(post_string($_POST, 'category_key'));
+                $name = trim(post_string($_POST, 'category_name'));
+                $description = trim(post_string($_POST, 'category_description'));
+                $order = filter_var(post_string($_POST, 'category_order') ?: '0', FILTER_VALIDATE_INT);
+                $nameLength = utf8_length($name);
+                $descriptionLength = utf8_length($description);
+                if (!preg_match('/^[a-z0-9][a-z0-9_-]{0,23}$/', $key)
+                    || $name === '' || $nameLength === null || $nameLength > 100
+                    || $descriptionLength === null || $descriptionLength > 2000
+                    || $order === false) {
+                    throw new InvalidArgumentException('Sprawdź identyfikator, nazwę, opis i kolejność kategorii.');
+                }
+                $stmt = $pdo->prepare('INSERT INTO download_categories (category_key,name,description,sort_order) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name),description=VALUES(description),sort_order=VALUES(sort_order)');
+                $stmt->execute([$key, $name, $description ?: null, $order]);
+                $notice = 'Kategoria została zapisana.';
+            } elseif ($action === 'delete_download_category') {
+                $key = trim(post_string($_POST, 'category_key'));
+                if (!preg_match('/^[a-z0-9][a-z0-9_-]{0,23}$/', $key)) {
+                    throw new InvalidArgumentException('Nieprawidłowy identyfikator kategorii.');
+                }
+                $count = $pdo->prepare('SELECT COUNT(*) FROM downloads WHERE category=?');
+                $count->execute([$key]);
+                if ((int) $count->fetchColumn() !== 0) {
+                    throw new InvalidArgumentException('Nie można usunąć kategorii, która zawiera wpisy. Najpierw przenieś lub usuń jej wpisy.');
+                }
+                $stmt = $pdo->prepare('DELETE FROM download_categories WHERE category_key=?');
+                $stmt->execute([$key]);
+                $notice = $stmt->rowCount() ? 'Kategoria została usunięta.' : 'Nie znaleziono kategorii.';
             } elseif ($action === 'delete_download') {
                 $id = filter_var(post_string($_POST, 'id'), FILTER_VALIDATE_INT);
                 if (!$id) {
@@ -233,6 +259,8 @@ if (!admin_logged_in()) {
 $pending = $pdo->query("SELECT * FROM hubs WHERE status='pending' ORDER BY created_at ASC")->fetchAll();
 $hubRows = $pdo->query("SELECT * FROM hubs WHERE status <> 'rejected' ORDER BY status, name")->fetchAll();
 $downloadRows = $pdo->query('SELECT * FROM downloads ORDER BY category, sort_order, name')->fetchAll();
+$downloadCategories = download_categories();
+$downloadCategoryRows = download_category_details();
 $pingerStmt = $pdo->query("SELECT setting_value FROM app_settings WHERE setting_key='pinger_nick'");
 $pingerNick = (string) ($pingerStmt->fetchColumn() ?: 'Hublist-Pinger');
 $editHubId = filter_var(is_string($_GET['edit_hub'] ?? null) ? $_GET['edit_hub'] : '', FILTER_VALIDATE_INT);
@@ -334,17 +362,58 @@ page_start('Panel administracyjny');
             <div class="field full"><button type="submit">Dodaj do katalogu</button></div>
         </form></section>
         <section class="panel"><h2>Katalog download</h2><div class="table-wrap"><table>
-        <thead><tr><th>Kategoria</th><th>Nazwa i wersja</th><th>Oficjalny link</th><th>Akcje</th></tr></thead><tbody>
+        <thead><tr><th>Kategoria</th><th>Nazwa i wersja</th><th>Oficjalny link</th><th>Kliknięcia pobrania</th><th>Akcje</th></tr></thead><tbody>
         <?php foreach ($downloadRows as $item): ?><tr>
-            <td><?= e(download_categories()[$item['category']] ?? $item['category']) ?></td>
+            <td><?= e($downloadCategories[$item['category']] ?? $item['category']) ?></td>
             <td><?= e($item['name']) ?><small><?= e($item['version']) ?> · <?= e($item['platform']) ?></small></td>
             <td><a href="<?= e($item['website']) ?>" target="_blank" rel="noopener noreferrer"><?= e($item['website']) ?></a></td>
+            <td><?= number_format((int) $item['download_count'], 0, ',', ' ') ?></td>
             <td><div class="actions"><a class="button secondary" href="?tab=downloads&amp;edit_download=<?= (int) $item['id'] ?>">Edytuj</a><form method="post" onsubmit="return confirm('Usunąć wpis z katalogu?')">
                 <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="id" value="<?= (int) $item['id'] ?>">
                 <button class="secondary" name="action" value="delete_download">Usuń</button>
             </form></div></td>
         </tr><?php endforeach; ?>
         </tbody></table></div></section>
+        <section class="panel"><h2>Zarządzaj kategoriami</h2>
+            <p class="muted">Kategorie zawierające wpisy można usunąć dopiero po przeniesieniu lub usunięciu tych wpisów. Licznik oznacza kliknięcia linku, a nie potwierdzone zakończenie pobierania.</p>
+            <div class="grid">
+                <?php foreach ($downloadCategoryRows as $categoryRow): ?>
+                    <form method="post" class="grid" style="border:1px solid #dce5ee;border-radius:10px;padding:16px">
+                        <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+                        <input type="hidden" name="action" value="save_download_category">
+                        <input type="hidden" name="category_key" value="<?= e($categoryRow['category_key']) ?>">
+                        <label class="field">Identyfikator<input value="<?= e($categoryRow['category_key']) ?>" disabled></label>
+                        <label class="field">Nazwa<input name="category_name" maxlength="100" required value="<?= e($categoryRow['name']) ?>"></label>
+                        <label class="field">Kolejność<input name="category_order" type="number" value="<?= (int) $categoryRow['sort_order'] ?>"></label>
+                        <label class="field full">Opis kategorii<textarea name="category_description" maxlength="2000"><?= e($categoryRow['description'] ?? '') ?></textarea></label>
+                        <div class="field full"><button type="submit">Zapisz kategorię</button></div>
+                    </form>
+                <?php endforeach; ?>
+            </div>
+            <h3>Dodaj kategorię</h3>
+            <form method="post" class="grid">
+                <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="action" value="save_download_category">
+                <label class="field">Identyfikator<input name="category_key" maxlength="24" pattern="[a-z0-9][a-z0-9_-]{0,23}" placeholder="np. tools" required></label>
+                <label class="field">Nazwa<input name="category_name" maxlength="100" required></label>
+                <label class="field">Kolejność<input name="category_order" type="number" value="50"></label>
+                <label class="field full">Opis kategorii<textarea name="category_description" maxlength="2000"></textarea></label>
+                <div class="field full"><button type="submit">Dodaj kategorię</button></div>
+            </form>
+            <?php foreach ($downloadCategoryRows as $categoryRow):
+                $categoryCount = 0;
+                foreach ($downloadRows as $downloadRow) {
+                    if ($downloadRow['category'] === $categoryRow['category_key']) {
+                        $categoryCount++;
+                    }
+                }
+                if ($categoryCount === 0): ?>
+                    <form method="post" onsubmit="return confirm('Usunąć pustą kategorię?')" style="display:inline-block;margin:6px 6px 0 0">
+                        <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="category_key" value="<?= e($categoryRow['category_key']) ?>">
+                        <button class="secondary" name="action" value="delete_download_category">Usuń pustą kategorię: <?= e($categoryRow['name']) ?></button>
+                    </form>
+                <?php endif;
+            endforeach; ?>
+        </section>
     <?php else: ?>
         <section class="panel"><h2>Import znanych list publicznych</h2>
             <p>Pobiera aktualne wpisy z pięciu publicznych źródeł, łączy duplikaty i dodaje nowe huby jako oczekujące na Twoją weryfikację.</p>
