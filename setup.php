@@ -188,8 +188,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ['client', 'AirDC++', 'https://github.com/airdcpp/airdcpp-windows/releases', 'Oficjalne wydania klienta Direct Connect dla Windows.'],
                         ['client', 'DC++', 'https://dcpp.net/download', 'Klient Direct Connect dla Windows.'],
                         ['client', 'EiskaltDC++', 'https://github.com/eiskaltdcpp/eiskaltdcpp/releases', 'Klient Direct Connect dostępny na wielu platformach.'],
+                        ['client', 'FlylinkDC++ (repozytorium społeczności)', 'https://github.com/pavel-pimenov/flylinkdc-r6xx', 'Społecznościowe repozytorium kodu klienta FlylinkDC++. Sprawdź instrukcje kompilacji i dostępność wydań.'],
+                        ['client', 'Jucy', 'https://github.com/Quicksilver666/jucy', 'Klient Direct Connect oparty na Javie; repozytorium społecznościowe. Sprawdź zgodność i wydania.'],
+                        ['client', 'ShakesPeer', 'https://github.com/rufuscoder/Shakespeer', 'Wieloplatformowy klient Direct Connect z repozytorium społecznościowym.'],
+                        ['client', 'ncdc', 'https://dev.yorhel.nl/ncdc', 'Lekki klient Direct Connect z interfejsem tekstowym; obsługuje ADC i NMDC. Projekt jest utrzymywany pasywnie.'],
+                        ['client', 'ApexDC++ (wersja archiwalna)', 'https://sourceforge.net/projects/apexdc/', 'Klasyczny klient Direct Connect. Projekt archiwalny; sprawdź zgodność i skanuj pobrane pliki.'],
                         ['server', 'Verlihub', 'https://github.com/Verlihub/verlihub/releases', 'Serwer hubów Direct Connect NMDC dla systemu Linux.'],
                         ['server', 'ADCH++', 'https://sourceforge.net/projects/adchpp/files/', 'Archiwum wydań serwera hubów Direct Connect ADC.'],
+                        ['server', 'µHub (uhub)', 'https://github.com/janvidar/uhub', 'Lekki serwer hubów ADC z otwartym kodem źródłowym.'],
                         ['server', 'PtokaX', 'http://www.ptokax.org/', 'Serwer hubów NMDC z obsługą Lua; oficjalna strona używa HTTP.'],
                     ];
                     $stmt = $pdo->prepare('INSERT INTO downloads (category, name, website, description) VALUES (?, ?, ?, ?)');

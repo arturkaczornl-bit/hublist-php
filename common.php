@@ -62,7 +62,7 @@ function upgrade_download_catalog(PDO $pdo): void
         $pdo->exec("ALTER TABLE downloads MODIFY category VARCHAR(24) NOT NULL DEFAULT 'client'");
     }
 
-    $marker = $pdo->query("SELECT setting_value FROM app_settings WHERE setting_key='catalog_categories_v2'")->fetchColumn();
+    $marker = $pdo->query("SELECT setting_value FROM app_settings WHERE setting_key='catalog_categories_v3'")->fetchColumn();
     if ($marker !== false) {
         return;
     }
@@ -73,9 +73,13 @@ function upgrade_download_catalog(PDO $pdo): void
         ['client', 'EiskaltDC++', 'https://github.com/eiskaltdcpp/eiskaltdcpp/releases', 'Otwartoźródłowy klient Direct Connect z wydaniami i kodem źródłowym.', 'Linux, Windows, macOS'],
         ['client', 'FlylinkDC++ (repozytorium społeczności)', 'https://github.com/pavel-pimenov/flylinkdc-r6xx', 'Społecznościowe repozytorium kodu klienta FlylinkDC++. Sprawdź instrukcje kompilacji i dostępność wydań.', 'Windows'],
         ['client', 'Jucy', 'https://github.com/Quicksilver666/jucy', 'Klient Direct Connect oparty na Javie; repozytorium społecznościowe, sprawdź zgodność i wydania.', 'Java, wiele systemów'],
+        ['client', 'ShakesPeer', 'https://github.com/rufuscoder/Shakespeer', 'Wieloplatformowy klient Direct Connect z repozytorium społecznościowym. Sprawdź dostępność wydań i wymagania systemowe.', 'Wiele platform'],
+        ['client', 'ncdc', 'https://dev.yorhel.nl/ncdc', 'Lekki klient Direct Connect z interfejsem tekstowym; obsługuje ADC i NMDC. Projekt jest utrzymywany pasywnie.', 'Linux, BSD, macOS, Android'],
+        ['client', 'ApexDC++ (wersja archiwalna)', 'https://sourceforge.net/projects/apexdc/', 'Klasyczny klient Direct Connect oparty na DC++ i StrongDC++. Projekt archiwalny; sprawdź zgodność z aktualnym Windows i skanuj pobrane pliki.', 'Windows, archiwalny'],
         ['server', 'Verlihub', 'https://github.com/Verlihub/verlihub/releases', 'Serwer hubów NMDC dla systemu Linux; obsługuje rozszerzenia Lua i Python.', 'Linux'],
         ['server', 'Verlihub — kod i dokumentacja', 'https://github.com/Verlihub/verlihub', 'Oficjalne repozytorium serwera, dokumentacja, wtyczki i skrypty.', 'Linux'],
         ['server', 'ADCH++', 'https://sourceforge.net/projects/adchpp/files/', 'Serwer hubów ADC; archiwum wydań SourceForge. Sprawdź aktualność, zgodność i system operacyjny przed instalacją.', 'Linux, Windows'],
+        ['server', 'µHub (uhub)', 'https://github.com/janvidar/uhub', 'Lekki, wysokowydajny serwer hubów ADC z otwartym kodem źródłowym.', 'Linux, Unix'],
         ['server', 'PtokaX', 'http://www.ptokax.org/', 'Serwer hubów NMDC z obsługą Lua. Oficjalna strona jest dostępna przez HTTP; sprawdź plik i źródło przed instalacją.', 'Windows, Linux'],
         ['script', 'Skrypty Lua do PtokaX — jasmucrai', 'https://github.com/jasmucrai/ptokax-scripts', 'Archiwum społecznościowe z katalogami dla Lua 5.0.2 i 5.1. Stare skrypty mogą nie działać z aktualnym hubsoftem; sprawdź licencję i kod.', 'Lua 5.0/5.1, PtokaX'],
         ['script', 'Skrypty Lua do PtokaX — vy_scripts', 'https://github.com/vyvl/vy_scripts', 'Zestaw skryptów Lua do PtokaX. Sprawdź wymagania wersji, licencję i kod przed instalacją.', 'Lua, PtokaX'],
@@ -93,7 +97,7 @@ function upgrade_download_catalog(PDO $pdo): void
     }
     $pdo->exec("UPDATE downloads SET website='https://sourceforge.net/projects/adchpp/files/' WHERE category='server' AND name='ADCH++' AND website LIKE 'https://github.com/ADCHpp/%'");
     $pdo->exec("UPDATE downloads SET website='http://www.ptokax.org/' WHERE category='server' AND name='PtokaX' AND website LIKE 'https://github.com/ptokax/%'");
-    $pdo->exec("INSERT INTO app_settings (setting_key,setting_value) VALUES ('catalog_categories_v2','1')");
+    $pdo->exec("INSERT INTO app_settings (setting_key,setting_value) VALUES ('catalog_categories_v3','1')");
 }
 
 function start_app_session(): void
