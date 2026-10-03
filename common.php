@@ -12,9 +12,24 @@ function app_config(): array
             http_response_code(503);
             exit('Hublist nie została skonfigurowana. Uruchom setup.php.');
         }
+        if ($iconUrl !== '' && (filter_var($iconUrl, FILTER_VALIDATE_URL) === false
+            || strtolower((string) parse_url($iconUrl, PHP_URL_SCHEME)) !== 'https')) {
+            throw new InvalidArgumentException('Adres ikony huba musi być prawidłowym adresem HTTPS.');
+        }
         $config = require $path;
     }
     return $config;
+}
+
+function protocol_badge_class(string $protocol): string
+{
+    return match ($protocol) {
+        'ADC' => 'protocol-adc',
+        'ADCS' => 'protocol-adcs',
+        'DCHUB' => 'protocol-dchub',
+        'NMDCS' => 'protocol-nmdcs',
+        default => 'protocol-nmdc',
+    };
 }
 
 function db(): PDO
@@ -32,7 +47,27 @@ function db(): PDO
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
     upgrade_download_catalog($pdo);
+    upgrade_hub_details($pdo);
     return $pdo;
+}
+
+function upgrade_hub_details(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked || !$pdo->query("SHOW TABLES LIKE 'hubs'")->fetchColumn()) {
+        return;
+    }
+    $checked = true;
+    $columns = [
+        'icon_url' => "ALTER TABLE hubs ADD icon_url VARCHAR(500) NULL",
+        'country_source' => "ALTER TABLE hubs ADD country_source VARCHAR(12) NULL",
+        'country_ip' => "ALTER TABLE hubs ADD country_ip VARCHAR(45) NULL",
+    ];
+    foreach ($columns as $name => $statement) {
+        if (!$pdo->query("SHOW COLUMNS FROM hubs LIKE " . $pdo->quote($name))->fetch()) {
+            $pdo->exec($statement);
+        }
+    }
 }
 
 function download_categories(): array
@@ -331,6 +366,7 @@ function normalize_hub_input(array $input): array
     $description = trim(post_string($input, 'description'));
     $software = trim(post_string($input, 'software'));
     $website = trim(post_string($input, 'website'));
+    $iconUrl = trim(post_string($input, 'icon_url'));
 
     if (!in_array($protocol, HUB_PROTOCOLS, true)) {
         throw new InvalidArgumentException('Wybierz poprawny protokół ADC, ADCS, DCHUB, NMDC lub NMDCS.');
@@ -349,6 +385,7 @@ function normalize_hub_input(array $input): array
         [$description, 5000, 'Opis huba'],
         [$software, 120, 'Nazwa oprogramowania'],
         [$website, 500, 'Adres strony WWW'],
+        [$iconUrl, 500, 'Adres ikony huba'],
     ] as [$value, $maximum, $label]) {
         $length = utf8_length($value);
         if ($length === null || $length > $maximum) {
@@ -363,6 +400,10 @@ function normalize_hub_input(array $input): array
             throw new InvalidArgumentException('Adres strony WWW musi być prawidłowym adresem HTTPS.');
         }
     }
+    if ($iconUrl !== '' && (!filter_var($iconUrl, FILTER_VALIDATE_URL)
+        || strtolower((string) parse_url($iconUrl, PHP_URL_SCHEME)) !== 'https')) {
+        throw new InvalidArgumentException('Adres ikony huba musi być prawidłowym adresem HTTPS.');
+    }
 
     return [
         'name' => $name,
@@ -373,6 +414,7 @@ function normalize_hub_input(array $input): array
         'description' => $description !== '' ? $description : null,
         'software' => $software !== '' ? $software : null,
         'website' => $website !== '' ? $website : null,
+        'icon_url' => $iconUrl !== '' ? $iconUrl : null,
     ];
 }
 
@@ -462,7 +504,7 @@ function security_headers(): void
 {
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
-    header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
+    header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
 }
 
 function page_start(string $title): void
@@ -487,8 +529,9 @@ function page_start(string $title): void
             .card,.panel{border:1px solid var(--line);border-radius:12px;background:var(--paper)}.card{padding:14px 16px}.card strong{display:block;font-size:1.65rem}.muted,small{color:var(--muted)}
             .panel{padding:18px;margin:14px 0}.actions,form{display:flex;gap:9px;flex-wrap:wrap;align-items:center}input,select,textarea{font:inherit;border:1px solid #bac5d3;border-radius:7px;background:#fff;padding:9px 11px;min-height:42px;color:var(--ink)}input[type=search]{flex:1 1 240px}textarea{width:100%;min-height:92px}button,.button{display:inline-block;border:1px solid var(--blue);border-radius:7px;background:var(--blue);color:white;padding:9px 14px;font:inherit;text-decoration:none;cursor:pointer}.button.secondary,button.secondary{background:white;color:var(--blue)}
             .table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;min-width:1050px}th,td{padding:10px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{font-size:.8rem;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}td small{display:block}.proto,.pill{display:inline-block;border-radius:20px;background:#eaf0f8;color:#233b5d;padding:2px 8px;font-size:.8rem;font-weight:650;white-space:nowrap}.ok{color:var(--green);font-weight:700}.bad{color:var(--red);font-weight:700}.wait{color:var(--amber);font-weight:700}.address{font-family:ui-monospace,monospace;overflow-wrap:anywhere}.detail{margin-top:2px}.note{padding:11px 14px;background:#fff8e7;border-left:4px solid #d1a23b;border-radius:4px}.error{padding:11px 14px;background:#fff0ef;border-left:4px solid var(--red);border-radius:4px}.success{padding:11px 14px;background:#edf9f1;border-left:4px solid var(--green);border-radius:4px}
+            .hub-flag{font-size:1.25rem;vertical-align:middle;margin-right:5px}.hub-name{font-weight:750;text-decoration:none;color:var(--ink)}.hub-name:hover{text-decoration:underline}.status-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin:0 7px 0 1px;vertical-align:middle}.status-dot.is-online{background:#19a35b;box-shadow:0 0 0 3px #e4f5eb}.status-dot.is-offline{background:#d43b3b;box-shadow:0 0 0 3px #fdeaea}.protocol-icon{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:4px 7px;font-size:.76rem;font-weight:750;white-space:nowrap}.protocol-adc{background:#e8f3ff;color:#14588d}.protocol-adcs{background:#e9edff;color:#3d4d9e}.protocol-dchub{background:#fff1dc;color:#87540d}.protocol-nmdc{background:#e9f6ec;color:#27633a}.protocol-nmdcs{background:#f2e9ff;color:#653a92}.hub-icon{width:76px;height:76px;border-radius:14px;object-fit:cover;border:1px solid var(--line);background:#eaf0f8}.hub-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.hub-detail{border:1px solid var(--line);border-radius:9px;padding:12px}.hub-detail strong{display:block;font-size:.78rem;color:var(--muted);margin-bottom:4px}.hub-detail span{overflow-wrap:anywhere}.topic{font-size:1.1rem;padding:15px;background:#f5f8fb;border-radius:9px}
             .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:grid;gap:4px}.field.full{grid-column:1/-1}.downloads{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}.download{border:1px solid var(--line);border-radius:10px;padding:15px}.download h3{margin:0}.empty{padding:15px;color:var(--muted)}.pager{display:flex;justify-content:center;gap:16px;padding-top:16px}.pager a{text-decoration:none;font-weight:650}footer{padding:0 0 26px;color:var(--muted);font-size:.9rem}
-            @media(max-width:760px){.top-inner{align-items:flex-start;flex-direction:column}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
+            @media(max-width:760px){.top-inner{align-items:flex-start;flex-direction:column}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid,.hub-detail-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
         </style>
     </head>
     <body><div class="top"><div class="top-inner"><a class="brand" href="index.php">Hublist</a><nav class="nav" aria-label="Menu główne"><a href="index.php">Hublista</a><a href="index.php#zglos-hub">Dodaj hub</a><a href="download.php">Download</a><a href="feed.php?format=xml">Feed XML</a><a href="about.php">O nas</a><a href="faq.php">FAQ</a><a href="rules.php">Regulamin</a><a href="admin.php">Administracja</a></nav></div></div>

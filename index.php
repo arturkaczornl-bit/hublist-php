@@ -13,7 +13,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
         if (trim(post_string($_POST, 'website_check')) !== '') {
             throw new InvalidArgumentException('Nie udało się przyjąć zgłoszenia.');
         }
-        $hub = normalize_hub_input($_POST);
+        $submissionInput = $_POST;
+        unset($submissionInput['icon_url']);
+        $hub = normalize_hub_input($submissionInput);
         $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
         $config = app_config();
         $ipHash = hash_hmac('sha256', $ip, $config['db_password'] . $config['db_name']);
@@ -30,10 +32,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
         }
 
         $pdo->beginTransaction();
-        $insert = $pdo->prepare('INSERT INTO hubs (name, protocol, host, port, country, description, software, website, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, "pending")');
+        $insert = $pdo->prepare('INSERT INTO hubs (name, protocol, host, port, country, country_source, description, software, website, icon_url, status) VALUES (?, ?, ?, ?, ?, IF(? IS NULL,NULL,"manual"), ?, ?, ?, ?, "pending")');
         $insert->execute([
             $hub['name'], $hub['protocol'], $hub['host'], $hub['port'],
-            $hub['country'], $hub['description'], $hub['software'], $hub['website'],
+            $hub['country'], $hub['country'], $hub['description'], $hub['software'], $hub['website'], $hub['icon_url'],
         ]);
         $saveSubmission = $pdo->prepare('INSERT INTO submissions (ip_hash) VALUES (?)');
         $saveSubmission->execute([$ipHash]);
@@ -147,7 +149,7 @@ page_start('Publiczna lista hubów Direct Connect');
         <div class="table-wrap">
         <table>
             <thead><tr>
-                <th>Nazwa / opis</th><th>Protokół</th><th>Adres i port</th><th>Ping</th>
+                <th>Kraj / hub</th><th>Stan</th><th>Protokół</th><th>Adres i port</th><th>Ping</th>
                 <th>Użytkownicy / share</th><th>Dostępność 30 dni</th><th>Certyfikat</th><th>Serwer</th><th>Źródła</th>
             </tr></thead>
             <tbody>
@@ -156,15 +158,16 @@ page_start('Publiczna lista hubów Direct Connect');
                 $secure = in_array($hub['protocol'], ['ADCS', 'NMDCS'], true);
                 ?>
                 <tr>
-                    <td><strong><?= e($hub['name']) ?></strong>
+                    <td>
+                        <span class="hub-flag" title="<?= e($hub['country'] ?: 'Kraj nieustalony') ?>"><?= e(flag_emoji($hub['country'])) ?></span>
+                        <a class="hub-name" href="hub.php?id=<?= (int) $hub['id'] ?>"><?= e($hub['name']) ?></a>
                         <small><?= e($hub['description']) ?></small>
-                        <?php if ($hub['website']): ?><small><a href="<?= e($hub['website']) ?>" target="_blank" rel="noopener noreferrer">Strona huba</a></small><?php endif; ?>
                     </td>
-                    <td><span class="proto"><?= e($hub['protocol']) ?></span></td>
-                    <td><span title="<?= e((string) $hub['country']) ?>"><?= e(flag_emoji($hub['country'])) ?></span>
-                        <br><a class="address" href="<?= e(hub_address($hub)) ?>"><?= e($hub['host']) ?>:<?= (int) $hub['port'] ?></a></td>
-                    <td><?= $online ? '<span class="ok">Online</span>' : '<span class="bad">' . e(ping_status_text($hub['pinger_status'])) . '</span>' ?>
-                        <small><?= $hub['ping_ms'] === null ? '—' : (int) $hub['ping_ms'] . ' ms' ?></small>
+                    <td><span class="status-dot <?= $online ? 'is-online' : 'is-offline' ?>" aria-label="<?= $online ? 'Działa' : 'Nie działa' ?>" title="<?= e(ping_status_text($hub['pinger_status'])) ?>"></span><?= $online ? '<span class="ok">Działa</span>' : '<span class="bad">Nie działa</span>' ?>
+                        <small><?= e(ping_status_text($hub['pinger_status'])) ?></small></td>
+                    <td><span class="protocol-icon <?= e(protocol_badge_class($hub['protocol'])) ?>"><span aria-hidden="true"><?= in_array($hub['protocol'], ['ADCS', 'NMDCS'], true) ? '🔒' : '↔' ?></span><?= e($hub['protocol']) ?></span></td>
+                    <td><a class="address" href="<?= e(hub_address($hub)) ?>"><?= e($hub['host']) ?></a><small>Port <?= (int) $hub['port'] ?></small></td>
+                    <td><?= $hub['ping_ms'] === null ? '—' : (int) $hub['ping_ms'] . ' ms' ?>
                         <small><?= e(utc_datetime($hub['last_ping_at'])) ?></small>
                         <?php if ($hub['pinger_error']): ?><small title="<?= e($hub['pinger_error']) ?>"><?= e(substr((string) $hub['pinger_error'], 0, 90)) ?></small><?php endif; ?>
                     </td>
@@ -183,7 +186,7 @@ page_start('Publiczna lista hubów Direct Connect');
                     <td><?= e($hub['imported_sources'] ?: 'Lista własna') ?></td>
                 </tr>
             <?php endforeach; ?>
-            <?php if ($hubs === []): ?><tr><td colspan="9" class="empty">Brak zatwierdzonych hubów spełniających filtr. Zgłoś pierwszy hub poniżej lub zatwierdź wpisy oczekujące.</td></tr><?php endif; ?>
+            <?php if ($hubs === []): ?><tr><td colspan="10" class="empty">Brak zatwierdzonych hubów spełniających filtr. Zgłoś pierwszy hub poniżej lub zatwierdź wpisy oczekujące.</td></tr><?php endif; ?>
             </tbody>
         </table>
         </div>

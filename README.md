@@ -26,12 +26,13 @@ Instalator próbuje zaimportować huby z kilku publicznych źródeł. Zewnętrzn
 
 - `admin.php` — logowanie, moderacja zgłoszeń, dodawanie, edycja i usuwanie hubów oraz pozycji katalogu, konfiguracja nicka pingera i zmiana hasła administratora;
 - `index.php` — wyszukiwanie i filtrowanie, do 30 hubów na stronę, szczegóły, port, kraj, status TLS, ping, uptime i dostępne statystyki;
+- `hub.php?id=...` — publiczne szczegóły zatwierdzonego huba: opis i temat odczytany przez pinger, adres/port, protokół, kraj, ikona ustawiana przez administratora, liczba użytkowników, share, ping, TLS i dostępność z 30 dni. Ulubione są zapisywane lokalnie w przeglądarce;
 - `hublist.xml` i `hublist.xml.bz2` — pobieralny feed zatwierdzonych hubów, do użycia w ustawieniach klienta DC. Warianty bez mod_rewrite są dostępne przez `feed.php?format=xml` i `feed.php?format=bz2`;
 - `about.php`, `faq.php` i `rules.php` — informacja o serwisie, przewodnik po Direct Connect i zasady katalogu;
 - publiczny formularz zgłoszenia — zgłoszenie pozostaje ukryte do zatwierdzenia; strona pokazuje maksymalnie pięć najnowszych oczekujących;
 - `download.php` — katalog download z kategoriami, opisami i linkami zarządzanymi z panelu; administrator może edytować nazwy/opisy kategorii, dodawać nowe kategorie i pozycje, zmieniać linki oraz usuwać wpisy. Kliknięcia przycisków pobierania są liczone i widoczne publicznie oraz w administracji. Licznik odzwierciedla kliknięcia/przekierowania, nie potwierdza zakończenia pobrania z zewnętrznej strony;
 - `imports.php` — ręczny import dostępnych feedów do moderacji;
-- `pinger.php` — skrypt CLI, loguje się pod skonfigurowanym nickiem (bot jest widoczny na hubie), sprawdza NMDC/ADC oraz TLS i zapisuje historię. Huby wymagające hasła lub odrzucające pingera nie będą omijane; ich stan będzie pokazany jako błąd.
+- `pinger.php` — skrypt CLI, loguje się pod skonfigurowanym nickiem (bot jest widoczny na hubie), sprawdza NMDC/ADC oraz TLS i zapisuje historię. Jeśli kraj nie został ustawiony ręcznie, pinger geolokalizuje publiczny adres IP przez usługę `ipwho.is` i zapisuje kod kraju oraz użyty adres IP. Oznacza to przekazanie adresu IP hosta usłudze geolokalizacyjnej; lokalizacja IP jest przybliżona. Huby wymagające hasła lub odrzucające pingera nie będą omijane; ich stan będzie pokazany jako błąd.
 
 Pinger nie gwarantuje danych, których hub nie udostępnia. Brak statystyki pozostaje pusty, nie jest zgadywany. Pinger wymaga publicznego adresu IP huba i blokuje adresy prywatne/lokalne.
 

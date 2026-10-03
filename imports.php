@@ -205,8 +205,8 @@ function import_public_hubs(PDO $pdo): array
     $errors = [];
     $findHub = $pdo->prepare("SELECT id,status FROM hubs WHERE host=? AND port=? AND protocol=? AND status <> 'rejected' LIMIT 1");
     $insertHub = $pdo->prepare(
-        "INSERT INTO hubs (name,protocol,host,port,country,description,software,status)
-         VALUES (?,?,?,?,?,?,?,'pending')"
+        "INSERT INTO hubs (name,protocol,host,port,country,country_source,description,software,status)
+         VALUES (?,?,?,?,?,IF(? IS NULL,NULL,'feed'),?,?, 'pending')"
     );
     $insertSource = $pdo->prepare(
         'INSERT IGNORE INTO hub_sources (hub_id,source_id,source_name,feed_url) VALUES (?,?,?,?)'
@@ -229,7 +229,7 @@ function import_public_hubs(PDO $pdo): array
                 } else {
                     $insertHub->execute([
                         $hub['name'], $hub['protocol'], $hub['host'], $hub['port'],
-                        $hub['country'], $hub['description'], $hub['software'],
+                        $hub['country'], $hub['country'], $hub['description'], $hub['software'],
                     ]);
                     $hubId = (int) $pdo->lastInsertId();
                     $newHubs++;

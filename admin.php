@@ -97,17 +97,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $resetPing = $endpointChanged
                         ? ',pinger_status=NULL,pinger_error=NULL,ping_ms=NULL,last_ping_at=NULL,tls_cert_valid=NULL,tls_cert_expires=NULL,tls_cert_issuer=NULL,tls_fingerprint=NULL,hub_name=NULL,hub_topic=NULL,online_users=NULL,shared_bytes=NULL'
                         : '';
-                    $stmt = $pdo->prepare('UPDATE hubs SET name=?,protocol=?,host=?,port=?,country=?,description=?,software=?,website=?,status=?,verified_at=IF(?="approved",COALESCE(verified_at,UTC_TIMESTAMP()),NULL)' . $resetPing . ' WHERE id=?');
+                    $stmt = $pdo->prepare('UPDATE hubs SET name=?,protocol=?,host=?,port=?,country=?,country_source=IF(? IS NULL,NULL,"manual"),country_ip=NULL,description=?,software=?,website=?,icon_url=?,status=?,verified_at=IF(?="approved",COALESCE(verified_at,UTC_TIMESTAMP()),NULL)' . $resetPing . ' WHERE id=?');
                     $stmt->execute([
-                        $hub['name'], $hub['protocol'], $hub['host'], $hub['port'], $hub['country'],
-                        $hub['description'], $hub['software'], $hub['website'], $status, $status, $id,
+                        $hub['name'], $hub['protocol'], $hub['host'], $hub['port'], $hub['country'], $hub['country'],
+                        $hub['description'], $hub['software'], $hub['website'], $hub['icon_url'], $status, $status, $id,
                     ]);
                     $notice = 'Dane huba zaktualizowane.';
                 } else {
-                    $stmt = $pdo->prepare('INSERT INTO hubs (name,protocol,host,port,country,description,software,website,status,verified_at) VALUES (?,?,?,?,?,?,?,?,?,IF(?="approved",UTC_TIMESTAMP(),NULL))');
+                    $stmt = $pdo->prepare('INSERT INTO hubs (name,protocol,host,port,country,country_source,description,software,website,icon_url,status,verified_at) VALUES (?,?,?,?,?,IF(? IS NULL,NULL,"manual"),?,?,?,?,IF(?="approved",UTC_TIMESTAMP(),NULL))');
                     $stmt->execute([
-                        $hub['name'], $hub['protocol'], $hub['host'], $hub['port'], $hub['country'],
-                        $hub['description'], $hub['software'], $hub['website'], $status, $status,
+                        $hub['name'], $hub['protocol'], $hub['host'], $hub['port'], $hub['country'], $hub['country'],
+                        $hub['description'], $hub['software'], $hub['website'], $hub['icon_url'], $status, $status,
                     ]);
                     $notice = 'Hub dodany.';
                 }
@@ -454,6 +454,7 @@ function render_hub_fields(?array $hub = null): void
     <label class="field">Oprogramowanie serwera<input name="software" maxlength="120" value="<?= e($hub['software'] ?? '') ?>"></label>
     <label class="field full">Opis<textarea name="description" maxlength="5000"><?= e($hub['description'] ?? '') ?></textarea></label>
     <label class="field full">Strona HTTPS<input name="website" type="url" maxlength="500" value="<?= e($hub['website'] ?? '') ?>"></label>
+    <label class="field full">Ikona huba HTTPS<input name="icon_url" type="url" maxlength="500" placeholder="https://example.org/hub-icon.png" value="<?= e($hub['icon_url'] ?? '') ?>"><small>Przeglądarka odwiedzającego pobierze ikonę z tego adresu HTTPS.</small></label>
     <?php
 }
 

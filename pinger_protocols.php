@@ -21,6 +21,28 @@ $input = [
 $hub = normalize_hub_input($input);
 expect($hub['port'] === 411, 'NMDC default port should be 411.');
 expect($hub['country'] === 'PL', 'Country code should be normalized.');
+expect(protocol_badge_class('ADC') === 'protocol-adc', 'ADC should use a distinct protocol badge.');
+expect(protocol_badge_class('ADCS') === 'protocol-adcs', 'ADCS should use a distinct protocol badge.');
+expect(protocol_badge_class('DCHUB') === 'protocol-dchub', 'DCHUB should use a distinct protocol badge.');
+expect(protocol_badge_class('NMDCS') === 'protocol-nmdcs', 'NMDCS should use a distinct protocol badge.');
+$iconHub = normalize_hub_input([
+    'name' => 'Hub z ikoną',
+    'protocol' => 'adc',
+    'host' => 'hub.example.org',
+    'icon_url' => 'https://example.org/hub.png',
+]);
+expect($iconHub['icon_url'] === 'https://example.org/hub.png', 'HTTPS hub icons should be accepted.');
+try {
+    normalize_hub_input([
+        'name' => 'Hub z niebezpieczną ikoną',
+        'protocol' => 'adc',
+        'host' => 'hub.example.org',
+        'icon_url' => 'http://example.org/hub.png',
+    ]);
+    expect(false, 'Non-HTTPS hub icons should be rejected.');
+} catch (InvalidArgumentException) {
+    expect(true, 'Non-HTTPS hub icons should be rejected.');
+}
 expect(utf8_length('Żółć 🎯') === 6, 'UTF-8 length should count characters.');
 expect(utf8_truncate('Żółć 🎯x', 6) === 'Żółć 🎯', 'UTF-8 truncation should not split a character.');
 expect(valid_host('hub.example.org'), 'Public host name should be accepted.');

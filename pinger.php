@@ -128,6 +128,41 @@ function public_hub_ip(string $host): string
     throw new HubPingStatus('invalid_address', 'Host nie wskazuje publicznego adresu IP.');
 }
 
+function country_for_public_ip(string $ip): string
+{
+    $flags = FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE;
+    if (filter_var($ip, FILTER_VALIDATE_IP, $flags) === false) {
+        throw new InvalidArgumentException('Geolokalizacja wymaga publicznego adresu IP.');
+    }
+    $url = 'https://ipwho.is/' . rawurlencode($ip) . '?fields=success,country_code';
+    $curl = curl_init($url);
+    if ($curl === false) {
+        throw new RuntimeException('Nie udało się rozpocząć zapytania geolokalizacyjnego.');
+    }
+    curl_setopt_array($curl, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_TIMEOUT => 6,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+        CURLOPT_USERAGENT => 'Hublist-IP-country-lookup/1.0',
+    ]);
+    $body = curl_exec($curl);
+    $statusCode = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+    $curlError = curl_error($curl);
+    curl_close($curl);
+    if (!is_string($body) || $statusCode !== 200) {
+        throw new RuntimeException('Usługa geolokalizacji IP nie odpowiedziała poprawnie'
+            . ($curlError !== '' ? ': ' . $curlError : ' (HTTP ' . $statusCode . ').'));
+    }
+    $data = json_decode($body, true);
+    $country = is_array($data) ? strtoupper((string) ($data['country_code'] ?? '')) : '';
+    if (!is_array($data) || ($data['success'] ?? false) !== true || !preg_match('/^[A-Z]{2}$/', $country)) {
+        throw new RuntimeException('Usługa geolokalizacji IP nie zwróciła prawidłowego kraju.');
+    }
+    return $country;
+}
+
 function current_certificate($stream): array
 {
     $options = stream_context_get_options($stream);
@@ -478,6 +513,10 @@ function run_pinger(): void
             online_users=COALESCE(?,online_users), shared_bytes=COALESCE(?,shared_bytes)
          WHERE id=?'
     );
+    $updateCountry = $pdo->prepare(
+        "UPDATE hubs SET country=?,country_source='ip',country_ip=?
+         WHERE id=? AND (country_source IS NULL OR country_source <> 'manual')"
+    );
     $history = $pdo->prepare(
         'INSERT INTO ping_history (hub_id,is_online,ping_ms,tls_cert_valid,tls_cert_expires,online_users)
          VALUES (?,?,?,?,?,?)'
@@ -490,6 +529,17 @@ function run_pinger(): void
             break;
         }
         $result = ping_one_hub($hub, $nick);
+        if (($hub['country_source'] ?? null) !== 'manual') {
+            try {
+                $ip = public_hub_ip((string) $hub['host']);
+                if (($hub['country_ip'] ?? null) !== $ip) {
+                    $country = country_for_public_ip($ip);
+                    $updateCountry->execute([$country, $ip, $hub['id']]);
+                }
+            } catch (Throwable $exception) {
+                error_log('Hublist country lookup failed for hub ' . (int) $hub['id'] . ': ' . $exception->getMessage());
+            }
+        }
         $checked++;
         $update->execute([
             $result['status'], $result['error'], $result['ping_ms'], $result['tls_cert_valid'],
