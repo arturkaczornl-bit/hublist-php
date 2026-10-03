@@ -28,10 +28,12 @@ Instalator próbuje zaimportować huby z kilku publicznych źródeł. Zewnętrzn
 
 ## Panel i funkcje
 
-- `admin.php` — logowanie, moderacja zgłoszeń, zarządzanie hubami i Pobieralnią, ustawienia pingera, statystyki aktywnych sesji, historia odwiedzin i blokowanie adresów IP;
+- `admin.php` — logowanie, moderacja zgłoszeń, zarządzanie hubami i Pobieralnią, edycja pozycji menu, ustawienia pingera, statystyki aktywnych sesji, historia odwiedzin i blokowanie adresów IP;
 - `index.php` — wyszukiwarka hubów z filtrami tekstu/adresu/portu, protokołu NMDC/ADC/TLS, kraju, statusu, serwera, liczby użytkowników, share i certyfikatu; sortowanie po popularności, share, dostępności, pingu, dacie sprawdzenia lub nazwie;
 - `stats.php` — publiczny ranking dostępności hubów w ostatnich 30 dniach z liczbą pomiarów i czasem ostatniego sprawdzenia przez pingera;
 - `visitor_ping.php` — odświeżanie aktywności sesji odwiedzającego bez dopisywania kolejnego wejścia do historii;
+
+W zakładce **Menu** administrator może zmieniać etykietę, adres, kolejność i widoczność wbudowanych pozycji, dodawać własne odnośniki oraz usuwać własne pozycje. Dozwolone są lokalne strony PHP i zewnętrzne adresy HTTPS. Zmiany są od razu używane w głównym menu nagłówka.
 - `hub.php?id=...` — publiczne szczegóły zatwierdzonego huba: opis i temat odczytany przez pinger, adres/port, protokół, kraj, ikona ustawiana przez administratora, liczba użytkowników, share, ping, TLS i dostępność z 30 dni. Ulubione są zapisywane lokalnie w przeglądarce;
 - `hublist.xml` i `hublist.xml.bz2` — pobieralny feed zatwierdzonych hubów, do użycia w ustawieniach klienta DC. Warianty bez mod_rewrite są dostępne przez `feed.php?format=xml` i `feed.php?format=bz2`;
 - `about.php`, `faq.php` i `rules.php` — informacja o serwisie, przewodnik po Direct Connect i zasady katalogu;

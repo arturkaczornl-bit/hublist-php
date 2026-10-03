@@ -49,8 +49,67 @@ function db(): PDO
     upgrade_download_catalog($pdo);
     upgrade_hub_details($pdo);
     upgrade_visitor_tracking($pdo);
+    upgrade_navigation_menu($pdo);
     enforce_ip_ban($pdo);
     return $pdo;
+}
+
+function upgrade_navigation_menu(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+    $pdo->exec("CREATE TABLE IF NOT EXISTS navigation_items (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        item_key VARCHAR(40) NULL UNIQUE,
+        label VARCHAR(60) NOT NULL,
+        url VARCHAR(500) NOT NULL,
+        sort_order INT NOT NULL DEFAULT 0,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        is_builtin TINYINT(1) NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_navigation_visible (is_active,sort_order,id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $items = [
+        ['home', 'Hublista', 'index.php', 10],
+        ['stats', 'Statystyki', 'stats.php', 20],
+        ['add_hub', 'Dodaj hub', 'add_hub.php', 30],
+        ['download', 'Pobieralnia', 'download.php', 40],
+        ['feed', 'Feed XML', 'feed.php?format=xml', 50],
+        ['about', 'O nas', 'about.php', 60],
+        ['faq', 'FAQ', 'faq.php', 70],
+        ['rules', 'Regulamin', 'rules.php', 80],
+        ['admin', 'Administracja', 'admin.php', 90],
+    ];
+    $insert = $pdo->prepare('INSERT IGNORE INTO navigation_items (item_key,label,url,sort_order,is_active,is_builtin) VALUES (?,?,?,?,1,1)');
+    foreach ($items as [$key, $label, $url, $order]) {
+        $insert->execute([$key, $label, $url, $order]);
+    }
+}
+
+function navigation_items(bool $activeOnly = true): array
+{
+    $where = $activeOnly ? ' WHERE is_active=1' : '';
+    return db()->query('SELECT id,item_key,label,url,sort_order,is_active,is_builtin FROM navigation_items'
+        . $where . ' ORDER BY sort_order,id')->fetchAll();
+}
+
+function valid_navigation_url(string $url): bool
+{
+    $url = trim($url);
+    if ($url === '' || strlen($url) > 500 || preg_match('/[\x00-\x20\x7F]/', $url)) {
+        return false;
+    }
+    if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
+        return true;
+    }
+    if (preg_match('/^[A-Za-z0-9_-]+\.php(?:\?[A-Za-z0-9_=&.%+-]*)?$/', $url)) {
+        return true;
+    }
+    return filter_var($url, FILTER_VALIDATE_URL) !== false
+        && strtolower((string) parse_url($url, PHP_URL_SCHEME)) === 'https';
 }
 
 function upgrade_visitor_tracking(PDO $pdo): void
@@ -683,7 +742,9 @@ function page_start(string $title): void
             @media(max-width:760px){.top-inner{align-items:flex-start;flex-direction:column}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid,.hub-detail-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
         </style>
     </head>
-    <body><div class="top"><div class="top-inner"><a class="brand" href="index.php" aria-label="Hublist.pl — polska hublista Direct Connect"><span class="brand-mark" aria-hidden="true"></span><span>Hublist<span class="brand-domain">.pl</span></span></a><nav class="nav" aria-label="Menu główne"><a href="index.php">Hublista</a><a href="stats.php">Statystyki</a><a href="add_hub.php">Dodaj hub</a><a href="download.php">Pobieralnia</a><a href="feed.php?format=xml">Feed XML</a><a href="about.php">O nas</a><a href="faq.php">FAQ</a><a href="rules.php">Regulamin</a><a href="admin.php">Administracja</a></nav></div></div>
+    <body><div class="top"><div class="top-inner"><a class="brand" href="index.php" aria-label="Hublist.pl — polska hublista Direct Connect"><span class="brand-mark" aria-hidden="true"></span><span>Hublist<span class="brand-domain">.pl</span></span></a><nav class="nav" aria-label="Menu główne">
+    <?php foreach (navigation_items() as $item): ?><a href="<?= e($item['url']) ?>"><?= e($item['label']) ?></a><?php endforeach; ?>
+    </nav></div></div>
     <?php
 }
 

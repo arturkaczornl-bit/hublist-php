@@ -205,6 +205,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare('DELETE FROM ip_bans WHERE ip_address=?');
                 $stmt->execute([$ip]);
                 $notice = $stmt->rowCount() ? 'Blokada adresu IP została zdjęta.' : 'Nie znaleziono takiej blokady.';
+            } elseif ($action === 'save_menu_item') {
+                $id = filter_var(post_string($_POST, 'id'), FILTER_VALIDATE_INT);
+                $label = trim(post_string($_POST, 'label'));
+                $url = trim(post_string($_POST, 'url'));
+                $order = filter_var(post_string($_POST, 'sort_order'), FILTER_VALIDATE_INT);
+                $active = post_string($_POST, 'is_active') === '1' ? 1 : 0;
+                $labelLength = utf8_length($label);
+                if (!$id || $labelLength === null || $labelLength < 1 || $labelLength > 60
+                    || !valid_navigation_url($url) || $order === false || $order < 0 || $order > 10000) {
+                    throw new InvalidArgumentException('Sprawdź nazwę, adres i kolejność pozycji menu.');
+                }
+                $stmt = $pdo->prepare('UPDATE navigation_items SET label=?,url=?,sort_order=?,is_active=? WHERE id=?');
+                $stmt->execute([$label, $url, $order, $active, $id]);
+                if ($stmt->rowCount() === 0) {
+                    $exists = $pdo->prepare('SELECT 1 FROM navigation_items WHERE id=?');
+                    $exists->execute([$id]);
+                    if (!$exists->fetchColumn()) {
+                        throw new InvalidArgumentException('Nie znaleziono tej pozycji menu.');
+                    }
+                }
+                $notice = 'Pozycja menu została zapisana.';
+            } elseif ($action === 'add_menu_item') {
+                $label = trim(post_string($_POST, 'label'));
+                $url = trim(post_string($_POST, 'url'));
+                $order = filter_var(post_string($_POST, 'sort_order'), FILTER_VALIDATE_INT);
+                $labelLength = utf8_length($label);
+                if ($labelLength === null || $labelLength < 1 || $labelLength > 60
+                    || !valid_navigation_url($url) || $order === false || $order < 0 || $order > 10000) {
+                    throw new InvalidArgumentException('Sprawdź nazwę, adres i kolejność nowej pozycji menu.');
+                }
+                $stmt = $pdo->prepare('INSERT INTO navigation_items (label,url,sort_order,is_active,is_builtin) VALUES (?,?,?,1,0)');
+                $stmt->execute([$label, $url, $order]);
+                $notice = 'Nowa pozycja menu została dodana.';
+            } elseif ($action === 'delete_menu_item') {
+                $id = filter_var(post_string($_POST, 'id'), FILTER_VALIDATE_INT);
+                if (!$id) {
+                    throw new InvalidArgumentException('Nieprawidłowy identyfikator pozycji menu.');
+                }
+                $stmt = $pdo->prepare('DELETE FROM navigation_items WHERE id=? AND is_builtin=0');
+                $stmt->execute([$id]);
+                $notice = $stmt->rowCount() ? 'Własna pozycja menu została usunięta.'
+                    : 'Nie znaleziono własnej pozycji menu. Wbudowane pozycje można wyłączyć, ale nie usunąć.';
             } elseif ($action === 'save_settings') {
                 $nick = trim(post_string($_POST, 'pinger_nick'));
                 if (!preg_match('/^[A-Za-z0-9_.-]{3,32}$/', $nick)) {
@@ -290,7 +332,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $tab = is_string($_GET['tab'] ?? null) ? $_GET['tab'] : 'pending';
-if (!in_array($tab, ['pending', 'hubs', 'downloads', 'visitors', 'settings'], true)) {
+if (!in_array($tab, ['pending', 'hubs', 'downloads', 'visitors', 'menu', 'settings'], true)) {
     $tab = 'pending';
 }
 
@@ -316,6 +358,7 @@ $hubRows = $pdo->query("SELECT * FROM hubs WHERE status <> 'rejected' ORDER BY s
 $downloadRows = $pdo->query('SELECT * FROM downloads ORDER BY category, sort_order, name')->fetchAll();
 $downloadCategories = download_categories();
 $downloadCategoryRows = download_category_details();
+$menuItems = $tab === 'menu' ? navigation_items(false) : [];
 $activeVisitors = [];
 $visitorHistory = [];
 $bannedIps = [];
@@ -401,6 +444,7 @@ page_start('Panel administracyjny');
             <a href="?tab=hubs">Huby</a>
             <a href="?tab=downloads">Pobieralnia</a>
             <a href="?tab=visitors">Odwiedzający</a>
+            <a href="?tab=menu">Menu</a>
             <a href="?tab=settings">Ustawienia</a>
         </nav>
         <form method="post" style="justify-content:flex-end">
@@ -524,6 +568,49 @@ page_start('Panel administracyjny');
                     </form>
                 <?php endif;
             endforeach; ?>
+        </section>
+    <?php elseif ($tab === 'menu'): ?>
+        <section class="panel">
+            <h2>Zarządzaj menu głównym</h2>
+            <p class="muted">Zmieniaj etykiety, adresy i kolejność. Wyłączenie ukrywa pozycję w nagłówku; wbudowane strony pozostają dostępne pod swoim adresem. Własne pozycje możesz całkowicie usunąć.</p>
+            <?php if ($menuItems === []): ?><p class="empty">Brak pozycji menu.</p><?php else: ?>
+            <div class="grid">
+                <?php foreach ($menuItems as $item): ?>
+                    <div class="panel" style="margin:0">
+                        <form method="post" class="grid">
+                            <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+                            <input type="hidden" name="action" value="save_menu_item">
+                            <input type="hidden" name="id" value="<?= (int) $item['id'] ?>">
+                            <label class="field">Nazwa widoczna<input name="label" maxlength="60" required value="<?= e($item['label']) ?>"></label>
+                            <label class="field">Adres / URL<input name="url" maxlength="500" required value="<?= e($item['url']) ?>"></label>
+                            <label class="field">Kolejność<input name="sort_order" type="number" min="0" max="10000" required value="<?= (int) $item['sort_order'] ?>"></label>
+                            <label class="field"><span><input type="checkbox" name="is_active" value="1" <?= (int) $item['is_active'] === 1 ? 'checked' : '' ?>> Widoczna w menu</span></label>
+                            <div class="field full"><button type="submit">Zapisz pozycję</button></div>
+                        </form>
+                        <?php if ((int) $item['is_builtin'] !== 1): ?>
+                            <form method="post" style="margin-top:8px" onsubmit="return confirm('Usunąć tę własną pozycję menu?');">
+                                <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+                                <input type="hidden" name="action" value="delete_menu_item">
+                                <input type="hidden" name="id" value="<?= (int) $item['id'] ?>">
+                                <button class="secondary" type="submit">Usuń pozycję</button>
+                            </form>
+                        <?php else: ?><p class="muted">Pozycja wbudowana — możesz ją wyłączyć, nie usuwając ustawień.</p><?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </section>
+        <section class="panel">
+            <h2>Dodaj pozycję menu</h2>
+            <p class="muted">Możesz podać ścieżkę strony serwisu, np. <code>stats.php</code>, albo bezpieczny zewnętrzny adres HTTPS.</p>
+            <form method="post" class="grid">
+                <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+                <input type="hidden" name="action" value="add_menu_item">
+                <label class="field">Nazwa widoczna<input name="label" maxlength="60" required placeholder="np. Forum"></label>
+                <label class="field">Adres / URL<input name="url" maxlength="500" required placeholder="forum.php lub https://example.org"></label>
+                <label class="field">Kolejność<input name="sort_order" type="number" min="0" max="10000" value="100" required></label>
+                <div class="field"><button type="submit">Dodaj do menu</button></div>
+            </form>
         </section>
     <?php elseif ($tab === 'visitors'): ?>
         <section class="panel">

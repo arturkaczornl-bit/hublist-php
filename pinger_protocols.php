@@ -27,6 +27,11 @@ expect(protocol_badge_class('DCHUB') === 'protocol-dchub', 'DCHUB should use a d
 expect(protocol_badge_class('NMDCS') === 'protocol-nmdcs', 'NMDCS should use a distinct protocol badge.');
 expect(normalize_ip_address('2001:0db8:0:0:0:0:0:1') === '2001:db8::1', 'IPv6 addresses should be normalized consistently.');
 expect(normalize_ip_address('not-an-ip') === null, 'Invalid visitor IP addresses should be rejected.');
+expect(valid_navigation_url('stats.php'), 'Local page links should be accepted in the menu.');
+expect(valid_navigation_url('feed.php?format=xml'), 'Simple query strings should be accepted in menu links.');
+expect(valid_navigation_url('https://example.org/community'), 'HTTPS external menu links should be accepted.');
+expect(!valid_navigation_url('javascript:alert(1)'), 'JavaScript URLs must not be accepted in menu links.');
+expect(!valid_navigation_url('//example.org'), 'Protocol-relative external menu links must not be accepted.');
 $_SERVER['REQUEST_URI'] = '/hub.php?id=7&token=private';
 $_GET = ['id' => '7', 'token' => 'private'];
 expect(visitor_request_path() === '/hub.php?id=7', 'Visitor history should keep useful page identifiers but omit unrelated query values.');
