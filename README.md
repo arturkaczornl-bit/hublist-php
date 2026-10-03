@@ -14,7 +14,7 @@ Composer nie jest wymagany. Rozszerzenie BZip2 jest potrzebne do pobierania skom
 
 ## Statystyki odwiedzin i blokowanie IP
 
-Panel administratora (`admin.php?tab=visitors`) pokazuje sesje z aktywnością w ciągu ostatnich 5 minut, ich adresy IP i aktualnie przeglądane strony. Aktywna karta odświeża heartbeat co minutę. Historia ostatnich 200 odsłon jest automatycznie usuwana po 30 dniach. Adresy IP są widoczne wyłącznie dla administratora. Ban blokuje dokładny adres IPv4 lub IPv6 na publicznych stronach serwisu i pozostaje aktywny do ręcznego odblokowania; panel administracyjny pozostaje dostępny dla administratora. Blokada może dotknąć wiele osób za wspólnym adresem IP. Pomiar bazuje na sesyjnych plikach cookie i adresie połączenia widzianym przez serwer; liczba sesji nie jest liczbą zweryfikowanych osób. Informacja o tych danych znajduje się w regulaminie.
+Panel administratora (`admin.php?tab=visitors`) pokazuje sesje z aktywnością w ciągu ostatnich 5 minut, ich adresy IP i aktualnie przeglądane strony. Aktywna karta odświeża heartbeat co minutę. Historię można przeglądać stronami po 100 wpisów lub filtrować po IP; wpisy starsze niż 30 dni są automatycznie usuwane. Adresy IP są widoczne wyłącznie dla administratora. Ban blokuje dokładny adres IPv4 lub IPv6 na publicznych stronach serwisu i pozostaje aktywny do ręcznego odblokowania; panel administracyjny pozostaje dostępny dla administratora. Blokada może dotknąć wiele osób za wspólnym adresem IP. Pomiar bazuje na sesyjnych plikach cookie i adresie połączenia widzianym przez serwer; liczba sesji nie jest liczbą zweryfikowanych osób. Informacja o tych danych znajduje się w regulaminie.
 
 ## Instalacja
 
