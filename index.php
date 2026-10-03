@@ -106,19 +106,24 @@ $pendingStmt = $pdo->query(
      FROM hubs WHERE status = 'pending' ORDER BY created_at DESC LIMIT 5"
 );
 $pending = $pendingStmt->fetchAll();
-$downloadStmt = $pdo->query('SELECT * FROM downloads ORDER BY category, sort_order, name');
-$downloadRows = $downloadStmt->fetchAll();
-$downloads = ['client' => [], 'server' => []];
-foreach ($downloadRows as $download) {
-    $downloads[$download['category']][] = $download;
-}
-
 page_start('Publiczna lista hubów Direct Connect');
 ?>
 <main>
     <section class="hero">
         <h1>Publiczna lista hubów Direct Connect</h1>
         <p>Huby ADC, ADCS, DCHUB, NMDC i NMDCS. Własny pinger, monitoring certyfikatów TLS, historia dostępności i katalog klientów oraz serwerów.</p>
+        <div class="actions" style="margin-top:14px">
+            <a class="button" href="hublist.xml" download>Pobierz listę XML</a>
+            <a class="button secondary" href="hublist.xml.bz2" download>Pobierz XML BZip2 (.bz2)</a>
+            <a class="button secondary" href="#zglos-hub">Dodaj hub</a>
+        </div>
+    </section>
+    <section class="panel" id="feed">
+        <h2>Dodaj tę hublistę do klienta Direct Connect</h2>
+        <p>W ustawieniach listy hubów w kliencie dodaj poniższy adres. Feed zawiera wyłącznie zatwierdzone huby i jest aktualizowany na bieżąco.</p>
+        <p><strong>XML:</strong> <a href="hublist.xml"><code>hublist.xml</code></a> (bezpośredni endpoint: <a href="feed.php?format=xml"><code>feed.php?format=xml</code></a>).</p>
+        <p><strong>XML skompresowany BZip2:</strong> <a href="hublist.xml.bz2"><code>hublist.xml.bz2</code></a> (bezpośredni endpoint: <a href="feed.php?format=bz2"><code>feed.php?format=bz2</code></a>).</p>
+        <p class="note">Wklej pełny adres linku XML w ustawieniach hublisty swojego klienta. Feed zawiera tylko zatwierdzone wpisy.</p>
     </section>
     <section class="cards" aria-label="Statystyki listy">
         <div class="card"><strong><?= number_format((int) ($stats['total'] ?? 0), 0, ',', ' ') ?></strong><span class="muted">zatwierdzonych hubów</span></div>
@@ -228,27 +233,13 @@ page_start('Publiczna lista hubów Direct Connect');
     </section>
 
     <section class="panel" id="download">
-        <h2>Download — klienci Direct Connect</h2>
-        <div class="downloads">
-            <?php foreach ($downloads['client'] as $item): ?>
-                <article class="download"><h3><?= e($item['name']) ?></h3>
-                    <small><?= e($item['version'] ?: $item['platform'] ?: 'Klient DC') ?></small>
-                    <p><?= e($item['description']) ?></p>
-                    <a class="button secondary" href="<?= e($item['website']) ?>" target="_blank" rel="noopener noreferrer">Oficjalna strona pobierania</a>
-                </article>
+        <h2>Download — klienci, huby, skrypty i narzędzia</h2>
+        <p>Przejdź do katalogu pobierania: serwery hubów, klienci Direct Connect, skrypty Lua oraz inne narzędzia.</p>
+        <div class="actions">
+            <?php foreach (download_categories() as $category => $label): ?>
+                <a class="button secondary" href="download.php?category=<?= e($category) ?>"><?= e($label) ?></a>
             <?php endforeach; ?>
-            <?php if ($downloads['client'] === []): ?><p class="empty">Administrator nie dodał jeszcze klientów.</p><?php endif; ?>
-        </div>
-        <h2 style="margin-top:24px">Oprogramowanie serwerowe hubów</h2>
-        <div class="downloads">
-            <?php foreach ($downloads['server'] as $item): ?>
-                <article class="download"><h3><?= e($item['name']) ?></h3>
-                    <small><?= e($item['version'] ?: $item['platform'] ?: 'Serwer DC') ?></small>
-                    <p><?= e($item['description']) ?></p>
-                    <a class="button secondary" href="<?= e($item['website']) ?>" target="_blank" rel="noopener noreferrer">Oficjalna strona pobierania</a>
-                </article>
-            <?php endforeach; ?>
-            <?php if ($downloads['server'] === []): ?><p class="empty">Administrator nie dodał jeszcze serwerów.</p><?php endif; ?>
+            <a class="button" href="download.php">Zobacz cały katalog</a>
         </div>
     </section>
 </main>

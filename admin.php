@@ -125,18 +125,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $descriptionLength = utf8_length($description);
                 $websiteLength = utf8_length($website);
                 $platformLength = utf8_length($platform);
+                $websiteScheme = strtolower((string) parse_url($website, PHP_URL_SCHEME));
+                $websiteHost = strtolower((string) parse_url($website, PHP_URL_HOST));
+                $safeWebsite = filter_var($website, FILTER_VALIDATE_URL)
+                    && ($websiteScheme === 'https' || ($websiteScheme === 'http' && $websiteHost === 'www.ptokax.org'));
                 if ($id === false) {
                     throw new InvalidArgumentException('Nieprawidłowy identyfikator katalogu.');
                 }
-                if (!in_array($category, ['client', 'server'], true) || $name === '' || $nameLength === null || $nameLength > 150
+                if (!array_key_exists($category, download_categories()) || $name === '' || $nameLength === null || $nameLength > 150
                     || $versionLength === null || $versionLength > 80
                     || $descriptionLength === null || $descriptionLength > 5000
                     || $websiteLength === null || $websiteLength > 500
                     || $platformLength === null || $platformLength > 150
-                    || !filter_var($website, FILTER_VALIDATE_URL)
-                    || strtolower((string) parse_url($website, PHP_URL_SCHEME)) !== 'https'
+                    || !$safeWebsite
                     || $order === false) {
-                    throw new InvalidArgumentException('Sprawdź nazwę, kategorię, kolejność i adres HTTPS.');
+                    throw new InvalidArgumentException('Sprawdź nazwę, kategorię, kolejność i adres HTTPS (wyjątek: oficjalna strona PtokaX).');
                 }
                 if ($id) {
                     $stmt = $pdo->prepare('UPDATE downloads SET category=?,name=?,version=?,description=?,website=?,platform=?,sort_order=? WHERE id=?');
@@ -333,7 +336,7 @@ page_start('Panel administracyjny');
         <section class="panel"><h2>Katalog download</h2><div class="table-wrap"><table>
         <thead><tr><th>Kategoria</th><th>Nazwa i wersja</th><th>Oficjalny link</th><th>Akcje</th></tr></thead><tbody>
         <?php foreach ($downloadRows as $item): ?><tr>
-            <td><?= $item['category'] === 'client' ? 'Klient' : 'Serwer' ?></td>
+            <td><?= e(download_categories()[$item['category']] ?? $item['category']) ?></td>
             <td><?= e($item['name']) ?><small><?= e($item['version']) ?> · <?= e($item['platform']) ?></small></td>
             <td><a href="<?= e($item['website']) ?>" target="_blank" rel="noopener noreferrer"><?= e($item['website']) ?></a></td>
             <td><div class="actions"><a class="button secondary" href="?tab=downloads&amp;edit_download=<?= (int) $item['id'] ?>">Edytuj</a><form method="post" onsubmit="return confirm('Usunąć wpis z katalogu?')">
@@ -389,7 +392,7 @@ function render_download_fields(?array $download = null): void
 {
     $download ??= [];
     ?>
-    <label class="field">Kategoria<select name="category"><option value="client" <?= ($download['category'] ?? 'client') === 'client' ? 'selected' : '' ?>>Klient Direct Connect</option><option value="server" <?= ($download['category'] ?? '') === 'server' ? 'selected' : '' ?>>Oprogramowanie serwerowe</option></select></label>
+    <label class="field">Kategoria<select name="category"><?php foreach (download_categories() as $value => $label): ?><option value="<?= e($value) ?>" <?= ($download['category'] ?? 'client') === $value ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></label>
     <label class="field">Nazwa<input name="name" maxlength="150" required value="<?= e($download['name'] ?? '') ?>"></label>
     <label class="field">Wersja<input name="version" maxlength="80" value="<?= e($download['version'] ?? '') ?>"></label>
     <label class="field">System / platforma<input name="platform" maxlength="150" placeholder="Windows, Linux, macOS…" value="<?= e($download['platform'] ?? '') ?>"></label>

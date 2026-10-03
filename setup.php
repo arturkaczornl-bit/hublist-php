@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Port MySQL musi być liczbą od 1 do 65535.');
             }
             $missingExtensions = [];
-            foreach (['pdo_mysql' => 'PDO MySQL', 'curl' => 'cURL', 'dom' => 'DOM', 'openssl' => 'OpenSSL'] as $extension => $label) {
+            foreach (['pdo_mysql' => 'PDO MySQL', 'curl' => 'cURL', 'dom' => 'DOM', 'openssl' => 'OpenSSL', 'bz2' => 'BZip2'] as $extension => $label) {
                 if (!extension_loaded($extension)) {
                     $missingExtensions[] = $label;
                 }
@@ -146,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
                     "CREATE TABLE IF NOT EXISTS downloads (
                         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                        category ENUM('client','server') NOT NULL,
+                        category VARCHAR(24) NOT NULL DEFAULT 'client',
                         name VARCHAR(150) NOT NULL,
                         version VARCHAR(80) NULL,
                         description TEXT NULL,
@@ -185,12 +185,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute(['Hublist-Pinger']);
 
                     $downloads = [
-                        ['client', 'AirDC++', 'https://www.airdcpp.net/download', 'Nowoczesny klient Direct Connect dla Windows.'],
+                        ['client', 'AirDC++', 'https://github.com/airdcpp/airdcpp-windows/releases', 'Oficjalne wydania klienta Direct Connect dla Windows.'],
                         ['client', 'DC++', 'https://dcpp.net/download', 'Klient Direct Connect dla Windows.'],
                         ['client', 'EiskaltDC++', 'https://github.com/eiskaltdcpp/eiskaltdcpp/releases', 'Klient Direct Connect dostępny na wielu platformach.'],
-                        ['server', 'Verlihub', 'https://github.com/Verlihub/VerliHub/releases', 'Serwer hubów Direct Connect NMDC.'],
-                        ['server', 'ADCH++', 'https://github.com/ADCHpp/ADCHpp/releases', 'Serwer hubów Direct Connect ADC.'],
-                        ['server', 'PtokaX', 'https://github.com/ptokax/ptokax/releases', 'Oprogramowanie serwera hubów NMDC.'],
+                        ['server', 'Verlihub', 'https://github.com/Verlihub/verlihub/releases', 'Serwer hubów Direct Connect NMDC dla systemu Linux.'],
+                        ['server', 'ADCH++', 'https://sourceforge.net/projects/adchpp/files/', 'Archiwum wydań serwera hubów Direct Connect ADC.'],
+                        ['server', 'PtokaX', 'http://www.ptokax.org/', 'Serwer hubów NMDC z obsługą Lua; oficjalna strona używa HTTP.'],
                     ];
                     $stmt = $pdo->prepare('INSERT INTO downloads (category, name, website, description) VALUES (?, ?, ?, ?)');
                     foreach ($downloads as $download) {

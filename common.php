@@ -31,7 +31,69 @@ function db(): PDO
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
+    upgrade_download_catalog($pdo);
     return $pdo;
+}
+
+function download_categories(): array
+{
+    return [
+        'server' => 'Serwery hubów',
+        'client' => 'Klienci Direct Connect',
+        'script' => 'Skrypty Lua i dodatki',
+        'other' => 'Inne narzędzia',
+    ];
+}
+
+function upgrade_download_catalog(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    if (!$pdo->query("SHOW TABLES LIKE 'app_settings'")->fetchColumn()
+        || !$pdo->query("SHOW TABLES LIKE 'downloads'")->fetchColumn()) {
+        return;
+    }
+    $checked = true;
+
+    $column = $pdo->query("SHOW COLUMNS FROM downloads LIKE 'category'")->fetch();
+    if (is_array($column) && str_starts_with(strtolower((string) $column['Type']), 'enum(')) {
+        $pdo->exec("ALTER TABLE downloads MODIFY category VARCHAR(24) NOT NULL DEFAULT 'client'");
+    }
+
+    $marker = $pdo->query("SELECT setting_value FROM app_settings WHERE setting_key='catalog_categories_v2'")->fetchColumn();
+    if ($marker !== false) {
+        return;
+    }
+
+    $items = [
+        ['client', 'AirDC++', 'https://github.com/airdcpp/airdcpp-windows/releases', 'Oficjalne wydania klienta AirDC++ dla Windows 10 i 11. Klient webowy jest dostępny na stronie projektu.', 'Windows, Linux przez klient webowy'],
+        ['client', 'DC++', 'https://dcpp.net/download', 'Klient Direct Connect dla systemu Windows.', 'Windows'],
+        ['client', 'EiskaltDC++', 'https://github.com/eiskaltdcpp/eiskaltdcpp/releases', 'Otwartoźródłowy klient Direct Connect z wydaniami i kodem źródłowym.', 'Linux, Windows, macOS'],
+        ['client', 'FlylinkDC++ (repozytorium społeczności)', 'https://github.com/pavel-pimenov/flylinkdc-r6xx', 'Społecznościowe repozytorium kodu klienta FlylinkDC++. Sprawdź instrukcje kompilacji i dostępność wydań.', 'Windows'],
+        ['client', 'Jucy', 'https://github.com/Quicksilver666/jucy', 'Klient Direct Connect oparty na Javie; repozytorium społecznościowe, sprawdź zgodność i wydania.', 'Java, wiele systemów'],
+        ['server', 'Verlihub', 'https://github.com/Verlihub/verlihub/releases', 'Serwer hubów NMDC dla systemu Linux; obsługuje rozszerzenia Lua i Python.', 'Linux'],
+        ['server', 'Verlihub — kod i dokumentacja', 'https://github.com/Verlihub/verlihub', 'Oficjalne repozytorium serwera, dokumentacja, wtyczki i skrypty.', 'Linux'],
+        ['server', 'ADCH++', 'https://sourceforge.net/projects/adchpp/files/', 'Serwer hubów ADC; archiwum wydań SourceForge. Sprawdź aktualność, zgodność i system operacyjny przed instalacją.', 'Linux, Windows'],
+        ['server', 'PtokaX', 'http://www.ptokax.org/', 'Serwer hubów NMDC z obsługą Lua. Oficjalna strona jest dostępna przez HTTP; sprawdź plik i źródło przed instalacją.', 'Windows, Linux'],
+        ['script', 'Skrypty Lua do PtokaX — jasmucrai', 'https://github.com/jasmucrai/ptokax-scripts', 'Archiwum społecznościowe z katalogami dla Lua 5.0.2 i 5.1. Stare skrypty mogą nie działać z aktualnym hubsoftem; sprawdź licencję i kod.', 'Lua 5.0/5.1, PtokaX'],
+        ['script', 'Skrypty Lua do PtokaX — vy_scripts', 'https://github.com/vyvl/vy_scripts', 'Zestaw skryptów Lua do PtokaX. Sprawdź wymagania wersji, licencję i kod przed instalacją.', 'Lua, PtokaX'],
+        ['script', 'Lua do EiskaltDC++', 'https://github.com/eiskaltdcpp/eiskaltdcpp/tree/master/data/luascripts', 'Skrypty dostarczane z klientem EiskaltDC++; zgodność zależy od wersji klienta.', 'Lua, EiskaltDC++'],
+        ['script', 'Wtyczka Lua dla Verlihub', 'https://github.com/Verlihub/verlihub/tree/master/plugins/lua', 'Kod wtyczki Lua z oficjalnego repozytorium Verlihub; to komponent serwera, nie samodzielny hubsoft.', 'Lua, Verlihub, Linux'],
+        ['other', 'Biblioteka list hubów Direct Connect', 'https://github.com/DCNF/Hublist', 'Otwartoźródłowy projekt narzędzia do pracy z listami hubów. Sprawdź README projektu.', 'Python'],
+    ];
+    $find = $pdo->prepare('SELECT id FROM downloads WHERE category=? AND name=? AND website=? LIMIT 1');
+    $insert = $pdo->prepare('INSERT INTO downloads (category,name,website,description,platform) VALUES (?,?,?,?,?)');
+    foreach ($items as [$category, $name, $website, $description, $platform]) {
+        $find->execute([$category, $name, $website]);
+        if ($find->fetchColumn() === false) {
+            $insert->execute([$category, $name, $website, $description, $platform]);
+        }
+    }
+    $pdo->exec("UPDATE downloads SET website='https://sourceforge.net/projects/adchpp/files/' WHERE category='server' AND name='ADCH++' AND website LIKE 'https://github.com/ADCHpp/%'");
+    $pdo->exec("UPDATE downloads SET website='http://www.ptokax.org/' WHERE category='server' AND name='PtokaX' AND website LIKE 'https://github.com/ptokax/%'");
+    $pdo->exec("INSERT INTO app_settings (setting_key,setting_value) VALUES ('catalog_categories_v2','1')");
 }
 
 function start_app_session(): void
@@ -54,6 +116,55 @@ function start_app_session(): void
 function e(?string $value): string
 {
     return htmlspecialchars($value ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+function build_hublist_xml(array $hubs): string
+{
+    $columns = [
+        'Name' => 'string',
+        'Address' => 'string',
+        'Description' => 'string',
+        'Country' => 'string',
+        'Users' => 'int',
+        'Shared' => 'bytes',
+        'Status' => 'string',
+        'Minshare' => 'bytes',
+        'Minslots' => 'int',
+        'Maxhubs' => 'int',
+        'Maxusers' => 'int',
+        'Reliability' => 'string',
+        'Rating' => 'string',
+    ];
+    $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+        . '<Hublist Name="Hublist">' . "\n  <Hubs>\n    <Columns>\n";
+    foreach ($columns as $name => $type) {
+        $xml .= '      <Column Name="' . $name . '" Type="' . $type . "\" />\n";
+    }
+    $xml .= "    </Columns>\n";
+    foreach ($hubs as $hub) {
+        $attributes = [
+            'Name' => (string) $hub['name'],
+            'Address' => hub_address($hub),
+            'Description' => (string) ($hub['description'] ?? ''),
+            'Country' => (string) ($hub['country'] ?? ''),
+            'Users' => (string) ($hub['online_users'] ?? 0),
+            'Shared' => (string) ($hub['shared_bytes'] ?? ''),
+            'Status' => ($hub['pinger_status'] ?? null) === 'online' ? 'Online' : 'Offline',
+            'Minshare' => '',
+            'Minslots' => '',
+            'Maxhubs' => '',
+            'Maxusers' => '',
+            'Reliability' => '',
+            'Rating' => '',
+        ];
+        $xml .= '    <Hub';
+        foreach ($attributes as $name => $value) {
+            $value = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $value) ?? '';
+            $xml .= ' ' . $name . '="' . htmlspecialchars($value, ENT_QUOTES | ENT_XML1 | ENT_SUBSTITUTE, 'UTF-8') . '"';
+        }
+        $xml .= " />\n";
+    }
+    return $xml . "  </Hubs>\n</Hublist>\n";
 }
 
 function post_string(array $input, string $key): string
@@ -284,6 +395,7 @@ function page_start(string $title): void
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="description" content="Niezależna lista hubów Direct Connect ADC i NMDC z własnym pingerem i pełnymi statystykami.">
+        <link rel="alternate" type="application/xml" href="feed.php?format=xml">
         <title><?= e($title) ?> — Hublist</title>
         <style>
             :root{color-scheme:light;--ink:#162338;--muted:#65758b;--line:#dce4ee;--paper:#fff;--bg:#f2f5f9;--blue:#165dbe;--green:#147341;--amber:#855700;--red:#a32626}
@@ -299,14 +411,14 @@ function page_start(string $title): void
             @media(max-width:760px){.top-inner{align-items:flex-start;flex-direction:column}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
         </style>
     </head>
-    <body><div class="top"><div class="top-inner"><a class="brand" href="index.php">Hublist</a><nav class="nav"><a href="index.php">Lista hubów</a><a href="index.php#oczekujace">Nowe zgłoszenia</a><a href="index.php#download">Download</a><a href="admin.php">Administracja</a></nav></div></div>
+    <body><div class="top"><div class="top-inner"><a class="brand" href="index.php">Hublist</a><nav class="nav" aria-label="Menu główne"><a href="index.php">Hublista</a><a href="index.php#zglos-hub">Dodaj hub</a><a href="download.php">Download</a><a href="feed.php?format=xml">Feed XML</a><a href="about.php">O nas</a><a href="faq.php">FAQ</a><a href="rules.php">Regulamin</a><a href="admin.php">Administracja</a></nav></div></div>
     <?php
 }
 
 function page_end(): void
 {
     ?>
-    <footer>Informacje i status połączenia są regularnie sprawdzane przez pinger. Brak gwarancji dostępności hubów i plików zewnętrznych.</footer>
+    <footer><p>Hublist pomaga znaleźć publiczne huby Direct Connect i udostępnia ich feed klientom DC. Status oraz linki do zewnętrznych programów mogą się zmieniać.</p><p><a href="about.php">O serwisie</a> · <a href="faq.php">FAQ</a> · <a href="rules.php">Regulamin</a> · <a href="download.php">Download</a> · <a href="admin.php">Administracja</a></p></footer>
     </body></html>
     <?php
 }

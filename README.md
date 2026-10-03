@@ -4,13 +4,13 @@ Niezależna hublista Direct Connect w PHP i MySQL. Użytkownicy mogą zgłaszać
 
 ## Wymagania
 
-- PHP 8.1 lub nowszy z `PDO MySQL`, `cURL`, `DOM`, `JSON` i `OpenSSL`;
+- PHP 8.1 lub nowszy z `PDO MySQL`, `cURL`, `DOM`, `JSON`, `OpenSSL` i `BZip2`;
 - MySQL 5.7+ lub MariaDB 10.3+;
 - hosting Apache z obsługą `.htaccess` (zalecane);
 - dostęp do cron oraz połączeń wychodzących HTTPS i TCP;
 - dla ADC/ADCS rozszerzenie PHP Hash z algorytmem `tiger192,3`; bez niego pinger jawnie zgłosi brak obsługi tego algorytmu.
 
-Composer ani rozszerzenie BZip2 nie są wymagane.
+Composer nie jest wymagany. Rozszerzenie BZip2 jest potrzebne do pobierania skompresowanego feedu `.bz2`.
 
 ## Instalacja
 
@@ -26,12 +26,27 @@ Instalator próbuje zaimportować huby z kilku publicznych źródeł. Zewnętrzn
 
 - `admin.php` — logowanie, moderacja zgłoszeń, dodawanie, edycja i usuwanie hubów oraz pozycji katalogu, konfiguracja nicka pingera i zmiana hasła administratora;
 - `index.php` — wyszukiwanie i filtrowanie, do 30 hubów na stronę, szczegóły, port, kraj, status TLS, ping, uptime i dostępne statystyki;
+- `hublist.xml` i `hublist.xml.bz2` — pobieralny feed zatwierdzonych hubów, do użycia w ustawieniach klienta DC. Warianty bez mod_rewrite są dostępne przez `feed.php?format=xml` i `feed.php?format=bz2`;
+- `about.php`, `faq.php` i `rules.php` — informacja o serwisie, przewodnik po Direct Connect i zasady katalogu;
 - publiczny formularz zgłoszenia — zgłoszenie pozostaje ukryte do zatwierdzenia; strona pokazuje maksymalnie pięć najnowszych oczekujących;
-- katalog download — linki klientów Direct Connect i serwerów są edytowalne w panelu i prowadzą do wskazanych stron HTTPS;
+- `download.php` — kategorie serwerów hubów, klientów, skryptów Lua i innych narzędzi; linki do wydań są edytowalne w panelu i prowadzą do stron projektów, nie do kopii plików;
 - `imports.php` — ręczny import dostępnych feedów do moderacji;
 - `pinger.php` — skrypt CLI, loguje się pod skonfigurowanym nickiem (bot jest widoczny na hubie), sprawdza NMDC/ADC oraz TLS i zapisuje historię. Huby wymagające hasła lub odrzucające pingera nie będą omijane; ich stan będzie pokazany jako błąd.
 
 Pinger nie gwarantuje danych, których hub nie udostępnia. Brak statystyki pozostaje pusty, nie jest zgadywany. Pinger wymaga publicznego adresu IP huba i blokuje adresy prywatne/lokalne.
+
+## Feed dla klientów Direct Connect
+
+Na stronie głównej są dostępne bezpośrednie adresy:
+
+- `https://twoja-domena/hublist.xml` — XML zgodny ze strukturą używaną przez popularne klienty DC;
+- `https://twoja-domena/hublist.xml.bz2` — ten sam feed skompresowany BZip2.
+
+Wklej pełny URL jako adres listy hubów w ustawieniach klienta. Jeśli hosting nie ma włączonego mod_rewrite, użyj `https://twoja-domena/feed.php?format=xml` albo `https://twoja-domena/feed.php?format=bz2`. Feed obejmuje wyłącznie zatwierdzone huby.
+
+## Katalog oprogramowania
+
+Katalog zawiera wybrane linki do klientów, serwerów hubów, skryptów i narzędzi, m.in. AirDC++, DC++, EiskaltDC++, FlylinkDC++, Jucy, Verlihub, ADCH++, PtokaX i repozytoriów Lua. To kuratorska lista odnośników, a nie kopia ani gwarantowany spis wszystkich dawnych i aktualnych wydań. Projekty społecznościowe lub archiwalne są oznaczone opisem; przed pobraniem i uruchomieniem sprawdź autora, aktualność, licencję i kod. PtokaX ma obecnie oficjalną stronę HTTP bez szyfrowania — zachowaj szczególną ostrożność przy pobieraniu z tego źródła.
 
 ## Cron — uruchamianie co 48 minut
 
@@ -53,7 +68,8 @@ Cron używa strefy czasowej serwera. Ścieżkę do PHP CLI oraz katalogu strony 
 - Nie umieszczaj `config.php` w repozytorium ani nie publikuj jego zawartości.
 - Jeśli instalator nie może połączyć się z bazą, sprawdź nazwę bazy/użytkownika, uprawnienia i czy hosting zezwala na połączenia PDO MySQL. Po naprawieniu konfiguracji można ponowić instalację.
 - Jeśli pinger nie działa, sprawdź log wyjściowy zadania cron, rozszerzenia OpenSSL/Hash oraz limity połączeń wychodzących hostingu.
-- Testy lokalnych parserów i protokołu NMDC uruchomisz poleceniem `php pinger_protocols.php`.
+- Jeśli feed `.bz2` nie działa, upewnij się, że rozszerzenie `bz2` jest aktywne również w PHP używanym przez serwer WWW (nie tylko PHP CLI).
+- Testy lokalnych parserów, XML i protokołu NMDC uruchomisz poleceniem `php pinger_protocols.php`.
 
 ## Licencja
 

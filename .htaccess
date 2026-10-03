@@ -1,4 +1,7 @@
 Options -Indexes
+RewriteEngine On
+RewriteRule ^hublist\.xml$ feed.php?format=xml [QSA,L]
+RewriteRule ^hublist\.xml\.bz2$ feed.php?format=bz2 [QSA,L]
 
 <Files "config.php">
     Require all denied

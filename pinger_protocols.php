@@ -27,6 +27,25 @@ expect(valid_host('hub.example.org'), 'Public host name should be accepted.');
 expect(!valid_host('127.0.0.1'), 'Loopback address should be rejected.');
 expect(base32_encode_bytes('f') === 'MY', 'Base32 encoding should match RFC 4648.');
 expect(decode_adc_text('A\\sB\\nC\\\\D') === "A B\nC\\D", 'ADC escape sequences should be decoded.');
+$xml = build_hublist_xml([[
+    'name' => 'Żółty & biały',
+    'protocol' => 'ADC',
+    'host' => 'hub.example.org',
+    'port' => 1511,
+    'description' => 'Opis z & oraz "cudzysłowem"' . "\x01",
+    'country' => 'PL',
+    'online_users' => 7,
+    'shared_bytes' => 1024,
+    'pinger_status' => 'online',
+]]);
+$parsedXml = parse_public_hub_feed($xml, ['format' => 'xml']);
+expect(count($parsedXml) === 1, 'Generated XML should be accepted as a hublist feed.');
+expect($parsedXml[0]['name'] === 'Żółty & biały' && $parsedXml[0]['protocol'] === 'ADC', 'Generated XML fields should be escaped and round-trip correctly.');
+expect(!str_contains($xml, "\x01"), 'Generated XML should omit characters forbidden by XML 1.0.');
+if (function_exists('bzcompress') && function_exists('bzdecompress')) {
+    $compressed = bzcompress($xml, 9);
+    expect(is_string($compressed) && bzdecompress($compressed) === $xml, 'BZip2 feed should round-trip correctly.');
+}
 $feed = json_encode([
     'hublist' => [
         ['address' => 'adc://hub.example.org:1511', 'name' => 'Żółty hub', 'country' => 'pl'],
