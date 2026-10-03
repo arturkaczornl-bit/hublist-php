@@ -39,7 +39,7 @@ page_start('FAQ — Direct Connect');
     </section>
     <section class="panel">
         <h2>Jak dodać hub do tej listy?</h2>
-        <p>Użyj formularza <a href="index.php#zglos-hub">„Zgłoś własny hub”</a>. Wpis pozostaje oczekujący do czasu sprawdzenia przez administratora. Podaj prawidłowy protokół, publiczny adres i port oraz informacje, które można publikować.</p>
+        <p>Użyj formularza na stronie <a href="add_hub.php">„Dodaj hub”</a>. Wpis pozostaje oczekujący do czasu sprawdzenia przez administratora. Podaj prawidłowy protokół, publiczny adres i port oraz informacje, które można publikować.</p>
     </section>
     <section class="panel">
         <h2>Jak dodać feed w kliencie?</h2>

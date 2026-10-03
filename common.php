@@ -532,7 +532,7 @@ function page_start(string $title): void
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="description" content="Niezależna lista hubów Direct Connect ADC i NMDC z własnym pingerem i pełnymi statystykami.">
+        <meta name="description" content="Polska hublista Direct Connect Hublist.pl — katalog hubów, statusy, feed XML i społeczność DC.">
         <link rel="alternate" type="application/xml" href="feed.php?format=xml">
         <meta name="theme-color" content="#102944">
             <link rel="canonical" href="<?= e($canonicalUrl) ?>">
@@ -552,7 +552,7 @@ function page_start(string $title): void
             @media(max-width:760px){.top-inner{align-items:flex-start;flex-direction:column}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid,.hub-detail-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
         </style>
     </head>
-    <body><div class="top"><div class="top-inner"><a class="brand" href="index.php" aria-label="Hublist.pl — polska hublista Direct Connect"><span class="brand-mark" aria-hidden="true"></span><span>Hublist<span class="brand-domain">.pl</span></span></a><nav class="nav" aria-label="Menu główne"><a href="index.php">Hublista</a><a href="index.php#zglos-hub">Dodaj hub</a><a href="download.php">Pobieralnia</a><a href="feed.php?format=xml">Feed XML</a><a href="about.php">O nas</a><a href="faq.php">FAQ</a><a href="rules.php">Regulamin</a><a href="admin.php">Administracja</a></nav></div></div>
+    <body><div class="top"><div class="top-inner"><a class="brand" href="index.php" aria-label="Hublist.pl — polska hublista Direct Connect"><span class="brand-mark" aria-hidden="true"></span><span>Hublist<span class="brand-domain">.pl</span></span></a><nav class="nav" aria-label="Menu główne"><a href="index.php">Hublista</a><a href="add_hub.php">Dodaj hub</a><a href="download.php">Pobieralnia</a><a href="feed.php?format=xml">Feed XML</a><a href="about.php">O nas</a><a href="faq.php">FAQ</a><a href="rules.php">Regulamin</a><a href="admin.php">Administracja</a></nav></div></div>
     <?php
 }
 

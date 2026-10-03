@@ -26,7 +26,7 @@ page_start('O serwisie Hublist.pl');
             <li>Otwórz ustawienia list hubów w kliencie i dodaj URL feedu XML: <a href="hublist.xml">hublist.xml</a>. Wiele klientów potrafi również pobierać skompresowany feed: <a href="hublist.xml.bz2">hublist.xml.bz2</a>.</li>
             <li>Wybierz hub i połącz się jego adresem. Przestrzegaj zasad danego huba.</li>
         </ol>
-        <p>Administratorzy hubów mogą zgłosić wpis przez <a href="index.php#zglos-hub">formularz zgłoszenia</a>. Zgłoszenie będzie widoczne publicznie dopiero po moderacji.</p>
+        <p>Administratorzy hubów mogą zgłosić wpis przez <a href="add_hub.php">osobną stronę zgłoszenia huba</a>. Zgłoszenie będzie widoczne publicznie dopiero po moderacji.</p>
     </section>
 </main>
 <?php page_end(); ?>
