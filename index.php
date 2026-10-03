@@ -1,678 +1,255 @@
 <?php
 declare(strict_types=1);
 
-const CACHE_TTL = 900;
-const STALE_TTL = 86400;
-const MAX_FEED_BYTES = 4194304;
+require __DIR__ . '/common.php';
+start_app_session();
+$pdo = db();
+$message = '';
+$error = '';
 
-$services = [
-    [
-        'id' => 'te-home',
-        'name' => 'Team Elite',
-        'url' => 'https://www.te-home.net/?do=hublist&get=hublist.xml',
-        'format' => 'xml',
-    ],
-    [
-        'id' => 'dchublist-org',
-        'name' => 'dchublist.org',
-        'url' => 'https://dchublist.org/hublist.xml',
-        'format' => 'xml',
-    ],
-    [
-        'id' => 'pwiam',
-        'name' => 'Public DC Hublist (PWiAM)',
-        'url' => 'https://hublist.pwiam.com/hublist.json',
-        'format' => 'json',
-    ],
-    [
-        'id' => 'dchublist-biz',
-        'name' => 'dchublist.biz',
-        'url' => 'https://dchublist.biz/?do=hublist&get=hublist.xml',
-        'format' => 'xml',
-    ],
-    [
-        'id' => 'dchublists-com',
-        'name' => 'dchublists.com',
-        'url' => 'https://dchublists.com/?do=hublist&get=hublist.xml',
-        'format' => 'xml',
-    ],
-    [
-        'id' => 'dchublist-ru',
-        'name' => 'dchublist.ru',
-        'url' => 'https://dchublist.ru/hublist.xml.bz2',
-        'format' => 'bz2xml',
-    ],
-];
-
-function escape_html(string $value): string
-{
-    return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-}
-
-function cache_path(): string
-{
-    return rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
-        . DIRECTORY_SEPARATOR
-        . 'hublist-php-' . hash('sha256', __DIR__) . '.json';
-}
-
-function read_cache(): array
-{
-    $path = cache_path();
-    if (!is_file($path)) {
-        return [];
-    }
-
-    $contents = file_get_contents($path);
-    if ($contents === false) {
-        return [];
-    }
-
-    $cache = json_decode($contents, true);
-    return is_array($cache) && isset($cache['providers']) && is_array($cache['providers'])
-        ? $cache
-        : [];
-}
-
-function write_cache(array $cache): bool
-{
-    $path = cache_path();
-    $temporaryPath = $path . '.' . bin2hex(random_bytes(6)) . '.tmp';
-    $contents = json_encode($cache, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-    if ($contents === false || file_put_contents($temporaryPath, $contents, LOCK_EX) === false) {
-        error_log('hublist-php: could not write the feed cache.');
-        return false;
-    }
-
-    if (!rename($temporaryPath, $path)) {
-        unlink($temporaryPath);
-        error_log('hublist-php: could not replace the feed cache.');
-        return false;
-    }
-
-    return true;
-}
-
-function is_valid_address(string $address): bool
-{
-    if ($address === '' || stripos($address, 'do not connect') !== false) {
-        return false;
-    }
-
-    if (preg_match('/^(dchub|nmdc|nmdcs|adc|adcs):\/\/[^\s<>"\']+$/i', $address)) {
-        return true;
-    }
-
-    return (bool) preg_match(
-        '/^(?:[a-z0-9.-]+|\[[0-9a-f:]+\])(?::[0-9]{1,5})?$/i',
-        $address
-    );
-}
-
-function field_value(array $fields, array $aliases): string
-{
-    foreach ($aliases as $alias) {
-        $key = strtolower($alias);
-        if (isset($fields[$key]) && is_scalar($fields[$key])) {
-            return trim((string) $fields[$key]);
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submit_hub') {
+    require_csrf();
+    try {
+        if (trim(post_string($_POST, 'website_check')) !== '') {
+            throw new InvalidArgumentException('Nie udało się przyjąć zgłoszenia.');
         }
-    }
-
-    return '';
-}
-
-function normalise_hub(array $fields, string $serviceId, string $serviceName): ?array
-{
-    $address = field_value($fields, ['address', 'hubaddress', 'url']);
-    if (!is_valid_address($address)) {
-        return null;
-    }
-
-    $name = field_value($fields, ['name', 'hubname']);
-    if ($name === '') {
-        $name = $address;
-    }
-
-    $usersText = field_value($fields, ['users', 'usercount', 'user_count']);
-    $usersDigits = preg_replace('/[^0-9]/', '', $usersText);
-    $users = $usersDigits !== '' ? (int) $usersDigits : null;
-
-    $status = field_value($fields, ['status', 'state']);
-    if ($status === '') {
-        $status = 'Brak danych';
-    }
-
-    $sharedText = field_value($fields, ['shared', 'share', 'sharedbytes']);
-    $sharedDigits = preg_replace('/[^0-9]/', '', $sharedText);
-    $sharedBytes = $sharedDigits !== '' ? (int) $sharedDigits : null;
-
-    return [
-        'name' => $name,
-        'address' => $address,
-        'description' => field_value($fields, ['description', 'desc']),
-        'country' => strtoupper(field_value($fields, ['country', 'countrycode'])),
-        'users' => $users,
-        'shared' => $sharedBytes,
-        'status' => $status,
-        'software' => field_value($fields, ['software', 'hubsoftware']),
-        'service_id' => $serviceId,
-        'service_name' => $serviceName,
-    ];
-}
-
-function parse_xml_hubs(string $xml, array $service): array
-{
-    if (!class_exists(DOMDocument::class)) {
-        throw new RuntimeException('Serwer wymaga rozszerzenia PHP DOM.');
-    }
-
-    $document = new DOMDocument();
-    $previousSetting = libxml_use_internal_errors(true);
-    $loaded = $document->loadXML($xml, LIBXML_NONET | LIBXML_NOBLANKS);
-    libxml_clear_errors();
-    libxml_use_internal_errors($previousSetting);
-
-    if (!$loaded) {
-        throw new RuntimeException('Nieprawidłowy dokument XML.');
-    }
-
-    $hubs = [];
-    foreach ($document->getElementsByTagName('Hub') as $element) {
-        $fields = [];
-        foreach ($element->attributes as $attribute) {
-            $fields[strtolower($attribute->nodeName)] = $attribute->nodeValue;
-        }
-        foreach ($element->childNodes as $child) {
-            if ($child instanceof DOMElement) {
-                $fields[strtolower($child->tagName)] = $child->textContent;
-            }
+        $hub = normalize_hub_input($_POST);
+        $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+        $config = app_config();
+        $ipHash = hash_hmac('sha256', $ip, $config['db_password'] . $config['db_name']);
+        $limit = $pdo->prepare('SELECT COUNT(*) FROM submissions WHERE ip_hash = ? AND submitted_at > UTC_TIMESTAMP() - INTERVAL 1 HOUR');
+        $limit->execute([$ipHash]);
+        if ((int) $limit->fetchColumn() >= 3) {
+            throw new InvalidArgumentException('Z tego adresu można wysłać maksymalnie 3 zgłoszenia na godzinę.');
         }
 
-        $hub = normalise_hub($fields, $service['id'], $service['name']);
-        if ($hub !== null) {
-            $hubs[] = $hub;
-        }
-    }
-
-    return $hubs;
-}
-
-function parse_feed(string $body, array $service): array
-{
-    if ($service['format'] === 'bz2xml') {
-        if (!function_exists('bzdecompress')) {
-            throw new RuntimeException('Źródło wymaga rozszerzenia PHP bz2.');
-        }
-        $decompressed = bzdecompress($body);
-        if (!is_string($decompressed)) {
-            throw new RuntimeException('Nie udało się rozpakować listy BZip2.');
-        }
-        $body = $decompressed;
-    }
-
-    if (strlen($body) > MAX_FEED_BYTES) {
-        throw new RuntimeException('Lista przekracza dozwolony rozmiar.');
-    }
-
-    if ($service['format'] === 'json') {
-        $document = json_decode($body, true);
-        if (!is_array($document) || !isset($document['hublist']) || !is_array($document['hublist'])) {
-            throw new RuntimeException('Nieprawidłowy dokument JSON.');
+        $duplicate = $pdo->prepare("SELECT id FROM hubs WHERE host = ? AND port = ? AND protocol = ? AND status <> 'rejected' LIMIT 1");
+        $duplicate->execute([$hub['host'], $hub['port'], $hub['protocol']]);
+        if ($duplicate->fetchColumn()) {
+            throw new InvalidArgumentException('Ten adres został już zgłoszony lub znajduje się na liście.');
         }
 
-        $hubs = [];
-        foreach ($document['hublist'] as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-            $hub = normalise_hub($item, $service['id'], $service['name']);
-            if ($hub !== null) {
-                $hubs[] = $hub;
-            }
-        }
-        return $hubs;
-    }
-
-    return parse_xml_hubs($body, $service);
-}
-
-function fetch_feeds(array $services): array
-{
-    if (!function_exists('curl_multi_init')) {
-        throw new RuntimeException('Serwer wymaga rozszerzenia PHP cURL.');
-    }
-
-    $multiHandle = curl_multi_init();
-    $requests = [];
-    $bodies = [];
-
-    foreach ($services as $service) {
-        if ($service['format'] === 'bz2xml' && !function_exists('bzdecompress')) {
-            $requests[$service['id']] = [
-                'service' => $service,
-                'error' => 'Wymaga rozszerzenia PHP bz2.',
-            ];
-            continue;
-        }
-
-        $handle = curl_init($service['url']);
-        if ($handle === false) {
-            $requests[$service['id']] = [
-                'service' => $service,
-                'error' => 'Nie udało się rozpocząć pobierania źródła.',
-            ];
-            continue;
-        }
-        $bodies[$service['id']] = '';
-        curl_setopt_array($handle, [
-            CURLOPT_RETURNTRANSFER => false,
-            CURLOPT_FOLLOWLOCATION => false,
-            CURLOPT_CONNECTTIMEOUT => 4,
-            CURLOPT_TIMEOUT => 10,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
-            CURLOPT_USERAGENT => 'Hublist-PHP/1.0 (+public DC hub aggregator)',
-            CURLOPT_HTTPHEADER => ['Accept: application/xml, application/json, application/octet-stream'],
-            CURLOPT_WRITEFUNCTION => static function ($curl, string $chunk) use (&$bodies, $service): int {
-                $bodies[$service['id']] .= $chunk;
-                return strlen($bodies[$service['id']]) <= MAX_FEED_BYTES ? strlen($chunk) : 0;
-            },
+        $pdo->beginTransaction();
+        $insert = $pdo->prepare('INSERT INTO hubs (name, protocol, host, port, country, description, software, website, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, "pending")');
+        $insert->execute([
+            $hub['name'], $hub['protocol'], $hub['host'], $hub['port'],
+            $hub['country'], $hub['description'], $hub['software'], $hub['website'],
         ]);
-        curl_multi_add_handle($multiHandle, $handle);
-        $requests[$service['id']] = [
-            'service' => $service,
-            'handle' => $handle,
-        ];
-    }
-
-    do {
-        do {
-            $multiStatus = curl_multi_exec($multiHandle, $running);
-        } while ($multiStatus === CURLM_CALL_MULTI_PERFORM);
-        if ($running > 0) {
-            $selected = curl_multi_select($multiHandle, 1.0);
-            if ($selected === -1) {
-                usleep(100000);
-            }
+        $saveSubmission = $pdo->prepare('INSERT INTO submissions (ip_hash) VALUES (?)');
+        $saveSubmission->execute([$ipHash]);
+        $pdo->commit();
+        $message = 'Dziękujemy! Zgłoszenie trafiło do kolejki weryfikacji administratora.';
+    } catch (InvalidArgumentException $exception) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
         }
-    } while ($running > 0 && $multiStatus === CURLM_OK);
-
-    foreach ($requests as $id => &$request) {
-        if (!isset($request['handle'])) {
-            continue;
+        $error = $exception->getMessage();
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
         }
-
-        $handle = $request['handle'];
-        $statusCode = (int) curl_getinfo($handle, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($handle);
-        $body = $bodies[$id];
-        curl_multi_remove_handle($multiHandle, $handle);
-        curl_close($handle);
-        unset($request['handle']);
-
-        if ($multiStatus !== CURLM_OK) {
-            $request['error'] = 'Błąd pobierania listy.';
-        } elseif ($curlError !== '') {
-            $request['error'] = 'Błąd połączenia: ' . $curlError;
-        } elseif ($statusCode < 200 || $statusCode >= 300) {
-            $request['error'] = 'Serwis zwrócił HTTP ' . $statusCode . '.';
-        } else {
-            try {
-                $request['hubs'] = parse_feed($body, $request['service']);
-                $request['fetched_at'] = time();
-            } catch (RuntimeException $exception) {
-                $request['error'] = $exception->getMessage();
-            }
-        }
+        error_log('Hublist submission failed: ' . $exception->getMessage());
+        $error = 'Nie udało się zapisać zgłoszenia. Spróbuj ponownie później.';
     }
-    unset($request);
-
-    curl_multi_close($multiHandle);
-    return $requests;
 }
 
-function load_provider_data(array $services): array
-{
-    $cache = read_cache();
-    if (isset($cache['fetched_at']) && time() - (int) $cache['fetched_at'] < CACHE_TTL) {
-        return $cache;
-    }
-
-    $fresh = fetch_feeds($services);
-    $providers = [];
-    foreach ($services as $service) {
-        $id = $service['id'];
-        $result = $fresh[$id] ?? ['error' => 'Nie udało się pobrać źródła.'];
-
-        if (isset($result['hubs'])) {
-            $providers[$id] = [
-                'status' => 'ok',
-                'fetched_at' => $result['fetched_at'],
-                'hubs' => $result['hubs'],
-            ];
-            continue;
-        }
-
-        $previous = $cache['providers'][$id] ?? null;
-        if (is_array($previous)
-            && isset($previous['fetched_at'], $previous['hubs'])
-            && time() - (int) $previous['fetched_at'] <= STALE_TTL) {
-            $previous['status'] = 'stale';
-            $previous['error'] = $result['error'] ?? 'Nie udało się odświeżyć źródła.';
-            $providers[$id] = $previous;
-        } else {
-            $providers[$id] = [
-                'status' => 'error',
-                'error' => $result['error'] ?? 'Źródło chwilowo niedostępne.',
-                'hubs' => [],
-            ];
-        }
-    }
-
-    $updated = ['fetched_at' => time(), 'providers' => $providers];
-    write_cache($updated);
-    return $updated;
-}
-
-function merge_hubs(array $services, array $providers): array
-{
-    $hubs = [];
-    foreach ($services as $service) {
-        $provider = $providers[$service['id']] ?? [];
-        foreach ($provider['hubs'] ?? [] as $hub) {
-            $key = strtolower($hub['address']);
-            if (!isset($hubs[$key])) {
-                $hub['sources'] = [$service['name']];
-                $hubs[$key] = $hub;
-                continue;
-            }
-
-            if (!in_array($service['name'], $hubs[$key]['sources'], true)) {
-                $hubs[$key]['sources'][] = $service['name'];
-            }
-            if ($hubs[$key]['users'] === null && $hub['users'] !== null) {
-                $hubs[$key]['users'] = $hub['users'];
-            }
-            if ($hubs[$key]['status'] !== 'Online' && $hub['status'] === 'Online') {
-                $hubs[$key]['status'] = 'Online';
-            }
-            if ($hubs[$key]['description'] === '' && $hub['description'] !== '') {
-                $hubs[$key]['description'] = $hub['description'];
-            }
-        }
-    }
-
-    return array_values($hubs);
-}
-
-function format_bytes(?int $bytes): string
-{
-    if ($bytes === null || $bytes < 0) {
-        return '—';
-    }
-    if ($bytes >= 1024 ** 4) {
-        return number_format($bytes / (1024 ** 4), 1, ',', ' ') . ' TiB';
-    }
-    if ($bytes >= 1024 ** 3) {
-        return number_format($bytes / (1024 ** 3), 1, ',', ' ') . ' GiB';
-    }
-    if ($bytes >= 1024 ** 2) {
-        return number_format($bytes / (1024 ** 2), 1, ',', ' ') . ' MiB';
-    }
-    return number_format($bytes / 1024, 0, ',', ' ') . ' KiB';
-}
-
-function format_time(?int $timestamp): string
-{
-    return $timestamp ? date('Y-m-d H:i', $timestamp) : '—';
-}
-
-function page_url(int $page, string $query, string $source): string
-{
-    $parameters = ['page' => $page];
-    if ($query !== '') {
-        $parameters['q'] = $query;
-    }
-    if ($source !== '') {
-        $parameters['source'] = $source;
-    }
-    return '?' . http_build_query($parameters);
-}
-
-$cacheNotice = '';
-try {
-    $cache = load_provider_data($services);
-} catch (RuntimeException $exception) {
-    $cache = read_cache();
-    if ($cache === []) {
-        $cache = ['fetched_at' => null, 'providers' => []];
-    }
-    $cacheNotice = $exception->getMessage();
-}
-
-$providers = $cache['providers'] ?? [];
-$hubs = merge_hubs($services, $providers);
-$rawQuery = $_GET['q'] ?? '';
-$query = trim(is_string($rawQuery) ? $rawQuery : '');
+$query = trim(is_string($_GET['q'] ?? null) ? $_GET['q'] : '');
 $query = substr($query, 0, 100);
-$rawSource = $_GET['source'] ?? '';
-$selectedSource = is_string($rawSource) ? $rawSource : '';
-$knownSources = array_column($services, 'id');
-if (!in_array($selectedSource, $knownSources, true)) {
-    $selectedSource = '';
+$protocolFilter = strtoupper(trim(is_string($_GET['protocol'] ?? null) ? $_GET['protocol'] : ''));
+if (!in_array($protocolFilter, HUB_PROTOCOLS, true)) {
+    $protocolFilter = '';
+}
+$rawPage = $_GET['page'] ?? '1';
+$pageNumber = filter_var(is_scalar($rawPage) ? (string) $rawPage : '1', FILTER_VALIDATE_INT);
+$pageNumber = $pageNumber === false ? 1 : max(1, $pageNumber);
+$pageSize = 30;
+$where = ["h.status = 'approved'"];
+$parameters = [];
+if ($protocolFilter !== '') {
+    $where[] = 'h.protocol = ?';
+    $parameters[] = $protocolFilter;
+}
+if ($query !== '') {
+    $where[] = '(h.name LIKE ? OR h.host LIKE ? OR h.description LIKE ? OR h.software LIKE ?)';
+    $needle = '%' . $query . '%';
+    array_push($parameters, $needle, $needle, $needle, $needle);
+}
+$whereSql = implode(' AND ', $where);
+$countStmt = $pdo->prepare("SELECT COUNT(*) FROM hubs h WHERE $whereSql");
+$countStmt->execute($parameters);
+$total = (int) $countStmt->fetchColumn();
+$pages = max(1, (int) ceil($total / $pageSize));
+$pageNumber = min($pageNumber, $pages);
+$offset = ($pageNumber - 1) * $pageSize;
+
+$hubsStmt = $pdo->prepare(
+    "SELECT h.*,
+        (SELECT GROUP_CONCAT(s.source_name ORDER BY s.source_name SEPARATOR ', ')
+         FROM hub_sources s WHERE s.hub_id=h.id) AS imported_sources,
+        (SELECT ROUND(100 * AVG(p.is_online), 1) FROM ping_history p
+         WHERE p.hub_id = h.id AND p.checked_at >= UTC_TIMESTAMP() - INTERVAL 30 DAY) AS uptime_30d
+     FROM hubs h WHERE $whereSql
+     ORDER BY (h.pinger_status = 'online') DESC, h.online_users DESC, h.name ASC
+     LIMIT $pageSize OFFSET $offset"
+);
+$hubsStmt->execute($parameters);
+$hubs = $hubsStmt->fetchAll();
+$stats = $pdo->query(
+    "SELECT SUM(status='approved') AS total,
+        SUM(status='approved' AND pinger_status = 'online') AS online,
+        SUM(status='approved' AND tls_cert_valid = 1) AS secure,
+        SUM(status = 'pending') AS pending
+     FROM hubs"
+)->fetch();
+$pendingStmt = $pdo->query(
+    "SELECT name, protocol, host, port, country, created_at
+     FROM hubs WHERE status = 'pending' ORDER BY created_at DESC LIMIT 5"
+);
+$pending = $pendingStmt->fetchAll();
+$downloadStmt = $pdo->query('SELECT * FROM downloads ORDER BY category, sort_order, name');
+$downloadRows = $downloadStmt->fetchAll();
+$downloads = ['client' => [], 'server' => []];
+foreach ($downloadRows as $download) {
+    $downloads[$download['category']][] = $download;
 }
 
-$sourceNames = [];
-foreach ($services as $service) {
-    $sourceNames[$service['id']] = $service['name'];
-}
-$selectedServiceName = $sourceNames[$selectedSource] ?? '';
-$filteredHubs = array_values(array_filter($hubs, static function (array $hub) use ($query, $selectedServiceName): bool {
-    if ($selectedServiceName !== '' && !in_array($selectedServiceName, $hub['sources'], true)) {
-        return false;
-    }
-    if ($query === '') {
-        return true;
-    }
-
-    $haystack = implode(' ', [
-        $hub['name'],
-        $hub['address'],
-        $hub['description'],
-        $hub['country'],
-        $hub['software'],
-        implode(' ', $hub['sources']),
-    ]);
-    return stripos($haystack, $query) !== false;
-}));
-usort($filteredHubs, static function (array $left, array $right): int {
-    return ($right['users'] ?? -1) <=> ($left['users'] ?? -1);
-});
-
-$pageSize = 25;
-$totalHubs = count($filteredHubs);
-$pageCount = max(1, (int) ceil($totalHubs / $pageSize));
-$rawPage = $_GET['page'] ?? 1;
-$requestedPage = is_scalar($rawPage) ? (int) $rawPage : 1;
-$page = min(max(1, $requestedPage), $pageCount);
-$pageHubs = array_slice($filteredHubs, ($page - 1) * $pageSize, $pageSize);
-$onlineCount = count(array_filter($hubs, static fn (array $hub): bool => strcasecmp($hub['status'], 'Online') === 0));
-$availableServices = count(array_filter($providers, static fn (array $provider): bool => in_array($provider['status'] ?? '', ['ok', 'stale'], true)));
-
-header('X-Content-Type-Options: nosniff');
-header('Referrer-Policy: strict-origin-when-cross-origin');
-header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
+page_start('Publiczna lista hubów Direct Connect');
 ?>
-<!doctype html>
-<html lang="pl">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Zbiorcza lista publicznych hubów Direct Connect z kilku serwisów hublist.">
-    <title>Hublist — publiczne huby Direct Connect</title>
-    <style>
-        :root {
-            color-scheme: light;
-            --ink: #182230;
-            --muted: #596779;
-            --line: #dce3ec;
-            --surface: #fff;
-            --background: #f3f6fa;
-            --accent: #145cc5;
-            --good: #197446;
-            --warn: #875800;
-            --bad: #a32929;
-        }
-        * { box-sizing: border-box; }
-        body { margin: 0; background: var(--background); color: var(--ink); font: 16px/1.5 system-ui, sans-serif; }
-        header { background: #11253d; color: #fff; padding: 2.5rem max(1rem, calc((100% - 1180px) / 2)); }
-        header h1 { margin: 0 0 .35rem; font-size: clamp(2rem, 5vw, 3rem); }
-        header p { max-width: 720px; margin: 0; color: #d7e2f0; }
-        main { max-width: 1180px; margin: 1.5rem auto; padding: 0 1rem 3rem; }
-        .stats, .providers, .panel { margin-bottom: 1rem; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
-        .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: hidden; }
-        .stat { padding: 1rem 1.25rem; }
-        .stat + .stat { border-left: 1px solid var(--line); }
-        .stat strong { display: block; font-size: 1.6rem; }
-        .muted, small { color: var(--muted); }
-        .providers { padding: 1rem 1.25rem; }
-        .providers h2, .panel h2 { margin: 0 0 .65rem; font-size: 1.1rem; }
-        .source-list { display: flex; flex-wrap: wrap; gap: .5rem; }
-        .source { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: .25rem .7rem; color: var(--ink); text-decoration: none; font-size: .9rem; }
-        .source.ok { border-color: #b5dec8; color: var(--good); }
-        .source.stale { border-color: #e7d1a5; color: var(--warn); }
-        .source.error { border-color: #e4bbbb; color: var(--bad); }
-        .source-note { margin: .8rem 0 0; font-size: .88rem; }
-        .notice { margin-bottom: 1rem; padding: .8rem 1rem; border-left: 4px solid var(--warn); background: #fff8e8; }
-        .panel { padding: 1rem 1.25rem; }
-        form { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1rem; }
-        input, select, button { min-height: 42px; border: 1px solid #aebaca; border-radius: 7px; padding: .55rem .75rem; font: inherit; }
-        input[type="search"] { flex: 1 1 260px; }
-        button { cursor: pointer; background: var(--accent); color: #fff; border-color: var(--accent); }
-        button.copy { min-height: 32px; padding: .2rem .55rem; color: var(--accent); background: #fff; border-color: var(--line); font-size: .85rem; }
-        .table-wrap { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; min-width: 820px; }
-        th, td { border-bottom: 1px solid var(--line); padding: .7rem .55rem; text-align: left; vertical-align: top; }
-        th { color: var(--muted); font-size: .83rem; text-transform: uppercase; letter-spacing: .03em; }
-        td small { display: block; max-width: 440px; margin-top: .2rem; }
-        .address { overflow-wrap: anywhere; font-family: ui-monospace, monospace; font-size: .9rem; }
-        .status-online { color: var(--good); font-weight: 650; }
-        .status-other { color: var(--muted); }
-        .pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; }
-        .pagination a { color: var(--accent); text-decoration: none; }
-        footer { max-width: 1180px; margin: 0 auto; padding: 0 1rem 2rem; color: var(--muted); font-size: .9rem; }
-        @media (max-width: 600px) {
-            header { padding-top: 1.7rem; padding-bottom: 1.7rem; }
-            .stats { grid-template-columns: 1fr; }
-            .stat + .stat { border-left: 0; border-top: 1px solid var(--line); }
-            .providers, .panel { padding: .85rem; }
-        }
-    </style>
-</head>
-<body>
-<header>
-    <h1>Hublist</h1>
-    <p>Publiczne huby Direct Connect z kilku niezależnych serwisów w jednej, przeszukiwalnej liście. Duplikaty są łączone według adresu huba.</p>
-</header>
 <main>
-    <?php if ($cacheNotice !== ''): ?>
-        <div class="notice"><?= escape_html($cacheNotice) ?><?php if ($hubs !== []): ?> Wyświetlam dostępną kopię danych.<?php endif; ?></div>
-    <?php endif; ?>
-    <section class="stats" aria-label="Podsumowanie">
-        <div class="stat"><strong><?= number_format($totalHubs, 0, ',', ' ') ?></strong><span class="muted">hubów spełnia filtr</span></div>
-        <div class="stat"><strong><?= number_format($onlineCount, 0, ',', ' ') ?></strong><span class="muted">oznaczonych jako online przez źródła</span></div>
-        <div class="stat"><strong><?= $availableServices ?> / <?= count($services) ?></strong><span class="muted">dostępnych źródeł</span></div>
+    <section class="hero">
+        <h1>Publiczna lista hubów Direct Connect</h1>
+        <p>Huby ADC, ADCS, DCHUB, NMDC i NMDCS. Własny pinger, monitoring certyfikatów TLS, historia dostępności i katalog klientów oraz serwerów.</p>
+    </section>
+    <section class="cards" aria-label="Statystyki listy">
+        <div class="card"><strong><?= number_format((int) ($stats['total'] ?? 0), 0, ',', ' ') ?></strong><span class="muted">zatwierdzonych hubów</span></div>
+        <div class="card"><strong class="ok"><?= number_format((int) ($stats['online'] ?? 0), 0, ',', ' ') ?></strong><span class="muted">ostatnio dostępnych</span></div>
+        <div class="card"><strong><?= number_format((int) ($stats['secure'] ?? 0), 0, ',', ' ') ?></strong><span class="muted">z poprawnym certyfikatem TLS</span></div>
+        <div class="card"><strong><?= number_format(count($pending), 0, ',', ' ') ?></strong><span class="muted">najnowszych zgłoszeń w kolejce</span></div>
     </section>
 
-    <section class="providers" aria-labelledby="sources-heading">
-        <h2 id="sources-heading">Źródła list</h2>
-        <div class="source-list">
-            <?php foreach ($services as $service):
-                $provider = $providers[$service['id']] ?? [];
-                $status = $provider['status'] ?? 'error';
-                $statusText = $status === 'ok' ? 'aktualne'
-                    : ($status === 'stale' ? 'kopia zapasowa' : 'niedostępne');
-                ?>
-                <a class="source <?= escape_html($status) ?>" href="<?= escape_html($service['url']) ?>" target="_blank" rel="noopener noreferrer">
-                    <?= escape_html($service['name']) ?> — <?= escape_html($statusText) ?>
-                </a>
-            <?php endforeach; ?>
-        </div>
-        <p class="source-note muted">Dane są pobierane równolegle i buforowane przez 15 minut. Przy awarii źródła może być pokazana jego kopia z ostatniej doby. Status online pochodzi od dostawcy listy i nie jest niezależnym testem połączenia.</p>
-        <?php foreach ($services as $service):
-            $provider = $providers[$service['id']] ?? [];
-            if (!isset($provider['error'])) {
-                continue;
-            }
-            ?>
-            <p class="source-note"><?= escape_html($service['name']) ?>: <?= escape_html($provider['error']) ?></p>
-        <?php endforeach; ?>
-    </section>
-
-    <section class="panel" aria-labelledby="hubs-heading">
-        <h2 id="hubs-heading">Lista hubów</h2>
+    <section class="panel">
+        <h2>Znajdź hub</h2>
         <form method="get">
-            <input type="search" name="q" value="<?= escape_html($query) ?>" placeholder="Szukaj nazwy, adresu, kraju, opisu…" aria-label="Szukaj hubów">
-            <select name="source" aria-label="Filtruj według źródła">
-                <option value="">Wszystkie źródła</option>
-                <?php foreach ($services as $service): ?>
-                    <option value="<?= escape_html($service['id']) ?>" <?= $selectedSource === $service['id'] ? 'selected' : '' ?>>
-                        <?= escape_html($service['name']) ?>
-                    </option>
+            <input type="search" name="q" value="<?= e($query) ?>" maxlength="100" placeholder="Nazwa, adres IP, opis lub oprogramowanie" aria-label="Szukaj huba">
+            <select name="protocol" aria-label="Wybierz protokół">
+                <option value="">Wszystkie protokoły</option>
+                <?php foreach (HUB_PROTOCOLS as $protocol): ?>
+                    <option value="<?= e($protocol) ?>" <?= $protocolFilter === $protocol ? 'selected' : '' ?>><?= e($protocol) ?></option>
                 <?php endforeach; ?>
             </select>
             <button type="submit">Szukaj</button>
         </form>
-
-        <?php if ($pageHubs === []): ?>
-            <p class="muted">Brak hubów pasujących do wyszukiwania. Jeśli źródła nie są dostępne, spróbuj ponownie później.</p>
-        <?php else: ?>
-            <div class="table-wrap">
-                <table>
-                    <thead><tr><th>Hub</th><th>Adres</th><th>Kraj</th><th>Użytkownicy</th><th>Udostępnione</th><th>Status</th><th>Źródła</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($pageHubs as $hub):
-                        $addressLink = preg_match('/^[a-z][a-z0-9+.-]*:\/\//i', $hub['address'])
-                            ? $hub['address']
-                            : 'dchub://' . $hub['address'];
-                        ?>
-                        <tr>
-                            <td><strong><?= escape_html($hub['name']) ?></strong><?php if ($hub['description'] !== ''): ?><small><?= escape_html($hub['description']) ?></small><?php endif; ?></td>
-                            <td><a class="address" href="<?= escape_html($addressLink) ?>"><?= escape_html($hub['address']) ?></a><br><button class="copy" type="button" data-address="<?= escape_html($hub['address']) ?>">Kopiuj</button></td>
-                            <td><?= escape_html($hub['country'] !== '' ? $hub['country'] : '—') ?></td>
-                            <td><?= $hub['users'] === null ? '—' : number_format($hub['users'], 0, ',', ' ') ?></td>
-                            <td><?= escape_html(format_bytes($hub['shared'])) ?></td>
-                            <td class="<?= strcasecmp($hub['status'], 'Online') === 0 ? 'status-online' : 'status-other' ?>"><?= escape_html($hub['status']) ?></td>
-                            <td><?= escape_html(implode(', ', $hub['sources'])) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <nav class="pagination" aria-label="Stronicowanie">
-                <?php if ($page > 1): ?><a href="<?= escape_html(page_url($page - 1, $query, $selectedSource)) ?>">← Poprzednia</a><?php endif; ?>
-                <span class="muted">Strona <?= $page ?> z <?= $pageCount ?> (<?= number_format($totalHubs, 0, ',', ' ') ?> hubów)</span>
-                <?php if ($page < $pageCount): ?><a href="<?= escape_html(page_url($page + 1, $query, $selectedSource)) ?>">Następna →</a><?php endif; ?>
+        <div class="table-wrap">
+        <table>
+            <thead><tr>
+                <th>Nazwa / opis</th><th>Protokół</th><th>Adres i port</th><th>Ping</th>
+                <th>Użytkownicy / share</th><th>Dostępność 30 dni</th><th>Certyfikat</th><th>Serwer</th><th>Źródła</th>
+            </tr></thead>
+            <tbody>
+            <?php foreach ($hubs as $hub):
+                $online = $hub['pinger_status'] === 'online';
+                $secure = in_array($hub['protocol'], ['ADCS', 'NMDCS'], true);
+                ?>
+                <tr>
+                    <td><strong><?= e($hub['name']) ?></strong>
+                        <small><?= e($hub['description']) ?></small>
+                        <?php if ($hub['website']): ?><small><a href="<?= e($hub['website']) ?>" target="_blank" rel="noopener noreferrer">Strona huba</a></small><?php endif; ?>
+                    </td>
+                    <td><span class="proto"><?= e($hub['protocol']) ?></span></td>
+                    <td><span title="<?= e((string) $hub['country']) ?>"><?= e(flag_emoji($hub['country'])) ?></span>
+                        <br><a class="address" href="<?= e(hub_address($hub)) ?>"><?= e($hub['host']) ?>:<?= (int) $hub['port'] ?></a></td>
+                    <td><?= $online ? '<span class="ok">Online</span>' : '<span class="bad">' . e(ping_status_text($hub['pinger_status'])) . '</span>' ?>
+                        <small><?= $hub['ping_ms'] === null ? '—' : (int) $hub['ping_ms'] . ' ms' ?></small>
+                        <small><?= e(utc_datetime($hub['last_ping_at'])) ?></small>
+                        <?php if ($hub['pinger_error']): ?><small title="<?= e($hub['pinger_error']) ?>"><?= e(substr((string) $hub['pinger_error'], 0, 90)) ?></small><?php endif; ?>
+                    </td>
+                    <td><?= $hub['online_users'] === null ? '—' : number_format((int) $hub['online_users'], 0, ',', ' ') ?>
+                        <small><?= e(pretty_bytes($hub['shared_bytes'] === null ? null : (int) $hub['shared_bytes'])) ?></small>
+                    </td>
+                    <td><?= $hub['uptime_30d'] === null ? '—' : number_format((float) $hub['uptime_30d'], 1, ',', ' ') . '%' ?></td>
+                    <td><?php if (!$secure): ?>Nie dotyczy
+                        <?php elseif ($hub['tls_cert_valid'] === null): ?>Nie sprawdzono
+                        <?php elseif ((int) $hub['tls_cert_valid'] === 1): ?><span class="ok">Poprawny</span><small>do <?= e(utc_datetime($hub['tls_cert_expires'])) ?></small>
+                        <?php else: ?><span class="bad">Nieprawidłowy</span><?php endif; ?>
+                    </td>
+                    <td><?= e($hub['software'] ?: '—') ?>
+                        <?php if ($hub['hub_name']): ?><small><?= e($hub['hub_name']) ?></small><?php endif; ?>
+                    </td>
+                    <td><?= e($hub['imported_sources'] ?: 'Lista własna') ?></td>
+                </tr>
+            <?php endforeach; ?>
+            <?php if ($hubs === []): ?><tr><td colspan="9" class="empty">Brak zatwierdzonych hubów spełniających filtr. Zgłoś pierwszy hub poniżej lub zatwierdź wpisy oczekujące.</td></tr><?php endif; ?>
+            </tbody>
+        </table>
+        </div>
+        <?php if ($pages > 1): ?>
+            <nav class="pager" aria-label="Strony listy">
+                <?php if ($pageNumber > 1): ?><a href="?<?= e(http_build_query(['q' => $query, 'protocol' => $protocolFilter, 'page' => $pageNumber - 1])) ?>">← Poprzednie 30</a><?php endif; ?>
+                <span class="muted">Strona <?= $pageNumber ?> z <?= $pages ?> · <?= number_format($total, 0, ',', ' ') ?> hubów</span>
+                <?php if ($pageNumber < $pages): ?><a href="?<?= e(http_build_query(['q' => $query, 'protocol' => $protocolFilter, 'page' => $pageNumber + 1])) ?>">Następne 30 →</a><?php endif; ?>
             </nav>
+        <?php else: ?><p class="muted"><?= number_format($total, 0, ',', ' ') ?> hubów. Strona wyświetla do 30 wyników; puste wpisy nie są sztucznie dodawane.</p><?php endif; ?>
+    </section>
+
+    <section class="panel" id="oczekujace">
+        <h2>5 najnowszych zgłoszeń oczekujących na weryfikację</h2>
+        <?php if ($pending === []): ?><p class="empty">Brak zgłoszeń oczekujących na sprawdzenie.</p><?php else: ?>
+            <div class="table-wrap"><table>
+                <thead><tr><th>Hub</th><th>Adres</th><th>Protokół</th><th>Dodano</th></tr></thead>
+                <tbody><?php foreach ($pending as $item): ?><tr>
+                    <td><?= e($item['name']) ?></td><td class="address"><?= e($item['host']) ?>:<?= (int) $item['port'] ?></td>
+                    <td><span class="proto"><?= e($item['protocol']) ?></span></td><td><?= e(utc_datetime($item['created_at'])) ?></td>
+                </tr><?php endforeach; ?></tbody>
+            </table></div>
         <?php endif; ?>
     </section>
+
+    <section class="panel" id="zglos-hub">
+        <h2>Zgłoś własny hub</h2>
+        <p class="muted">Zgłoszenie jest widoczne jako oczekujące, dopóki administrator nie sprawdzi jego adresu, protokołu i odpowiedzi pingera.</p>
+        <?php if ($message !== ''): ?><p class="success"><?= e($message) ?></p><?php endif; ?>
+        <?php if ($error !== ''): ?><p class="error"><?= e($error) ?></p><?php endif; ?>
+        <form method="post" class="grid">
+            <input type="hidden" name="action" value="submit_hub">
+            <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+            <label class="field">Nazwa huba<input name="name" maxlength="150" required></label>
+            <label class="field">Protokół<select name="protocol" required>
+                <?php foreach (HUB_PROTOCOLS as $protocol): ?><option value="<?= e($protocol) ?>"><?= e($protocol) ?></option><?php endforeach; ?>
+            </select></label>
+            <label class="field">Adres IP lub nazwa hosta<input name="host" maxlength="253" required placeholder="hub.example.org"></label>
+            <label class="field">Port<input name="port" type="number" min="1" max="65535" placeholder="domyślny dla protokołu"></label>
+            <label class="field">Kraj (kod ISO, np. PL)<input name="country" maxlength="2" pattern="[A-Za-z]{2}"></label>
+            <label class="field">Oprogramowanie serwera<input name="software" maxlength="120"></label>
+            <label class="field full">Opis<textarea name="description" maxlength="5000"></textarea></label>
+            <label class="field full">Strona huba (HTTPS)<input name="website" type="url" maxlength="500" placeholder="https://example.org"></label>
+            <label class="field" style="position:absolute;left:-10000px" aria-hidden="true">Pozostaw puste<input name="website_check" tabindex="-1" autocomplete="off"></label>
+            <div class="field full"><button type="submit">Wyślij do weryfikacji</button></div>
+        </form>
+    </section>
+
+    <section class="panel" id="download">
+        <h2>Download — klienci Direct Connect</h2>
+        <div class="downloads">
+            <?php foreach ($downloads['client'] as $item): ?>
+                <article class="download"><h3><?= e($item['name']) ?></h3>
+                    <small><?= e($item['version'] ?: $item['platform'] ?: 'Klient DC') ?></small>
+                    <p><?= e($item['description']) ?></p>
+                    <a class="button secondary" href="<?= e($item['website']) ?>" target="_blank" rel="noopener noreferrer">Oficjalna strona pobierania</a>
+                </article>
+            <?php endforeach; ?>
+            <?php if ($downloads['client'] === []): ?><p class="empty">Administrator nie dodał jeszcze klientów.</p><?php endif; ?>
+        </div>
+        <h2 style="margin-top:24px">Oprogramowanie serwerowe hubów</h2>
+        <div class="downloads">
+            <?php foreach ($downloads['server'] as $item): ?>
+                <article class="download"><h3><?= e($item['name']) ?></h3>
+                    <small><?= e($item['version'] ?: $item['platform'] ?: 'Serwer DC') ?></small>
+                    <p><?= e($item['description']) ?></p>
+                    <a class="button secondary" href="<?= e($item['website']) ?>" target="_blank" rel="noopener noreferrer">Oficjalna strona pobierania</a>
+                </article>
+            <?php endforeach; ?>
+            <?php if ($downloads['server'] === []): ?><p class="empty">Administrator nie dodał jeszcze serwerów.</p><?php endif; ?>
+        </div>
+    </section>
 </main>
-<footer>
-    Ostatnia próba aktualizacji: <?= escape_html(format_time(isset($cache['fetched_at']) ? (int) $cache['fetched_at'] : null)) ?>.
-    Hublist łączy publiczne dane z zewnętrznych serwisów; szczegóły i aktualność wpisów zależą od ich dostawców.
-</footer>
-<script>
-document.querySelectorAll('.copy').forEach(function (button) {
-    button.addEventListener('click', async function () {
-        try {
-            await navigator.clipboard.writeText(button.dataset.address);
-            button.textContent = 'Skopiowano';
-        } catch (error) {
-            button.textContent = 'Nie udało się skopiować';
-        }
-    });
-});
-</script>
-</body>
-</html>
+<?php page_end(); ?>

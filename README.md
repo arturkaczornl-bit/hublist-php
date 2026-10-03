@@ -1,40 +1,59 @@
 # Hublist PHP
 
-Lekka, responsywna strona PHP łącząca publiczne listy hubów Direct Connect. Aplikacja pobiera dane z kilku serwisów, normalizuje XML/JSON, scala wpisy o tym samym adresie i udostępnia wyszukiwarkę bez bazy danych ani Composera.
+Niezależna hublista Direct Connect w PHP i MySQL. Użytkownicy mogą zgłaszać huby, administrator je moderuje, a własny pinger sprawdza zatwierdzone wpisy. Aplikacja ma też edytowalny katalog klientów DC i oprogramowania serwerowego.
 
 ## Wymagania
 
-- PHP 8.1 lub nowszy
-- rozszerzenia PHP `cURL`, `DOM` i `JSON`
-- rozszerzenie PHP `bz2` jest opcjonalne; umożliwia pobieranie `dchublist.ru`
-- katalog tymczasowy PHP dostępny do zapisu, aby włączać 15-minutowy cache
+- PHP 8.1 lub nowszy z `PDO MySQL`, `cURL`, `DOM`, `JSON` i `OpenSSL`;
+- MySQL 5.7+ lub MariaDB 10.3+;
+- hosting Apache z obsługą `.htaccess` (zalecane);
+- dostęp do cron oraz połączeń wychodzących HTTPS i TCP;
+- dla ADC/ADCS rozszerzenie PHP Hash z algorytmem `tiger192,3`; bez niego pinger jawnie zgłosi brak obsługi tego algorytmu.
 
-## Uruchomienie na hostingu
+Composer ani rozszerzenie BZip2 nie są wymagane.
 
-1. Wgraj `index.php` do katalogu strony obsługującego PHP (np. `public_html`).
-2. Upewnij się, że hosting ma wymagane rozszerzenia i obsługuje połączenia HTTPS wychodzące.
-3. Otwórz adres strony w przeglądarce. Lista odświeża się automatycznie co 15 minut.
+## Instalacja
 
-Nie są wymagane baza danych, Composer ani zadanie cron. Cache jest zapisywany w katalogu tymczasowym serwera, poza katalogiem publicznej strony. Gdy źródło chwilowo nie odpowiada, aplikacja może wyświetlić jego ostatnią kopię z maksymalnie 24 godzin.
+1. Wgraj pliki aplikacji do katalogu strony WWW.
+2. Utwórz pustą bazę MySQL i osobnego użytkownika z prawami do tworzenia tabel oraz zapisu.
+3. Otwórz `https://twoja-domena/setup.php`, podaj dane bazy, nazwę administratora i mocne hasło (co najmniej 14 znaków).
+4. Zaloguj się przez `admin.php`, sprawdź wpisy importowane do moderacji i zatwierdź te, które mają być publiczne.
+5. Po instalacji usuń `setup.php` z serwera. Zachowaj `config.php` poza publicznym repozytorium; `.htaccess` blokuje bezpośredni dostęp do tego pliku na Apache.
 
-## Źródła
+Instalator próbuje zaimportować huby z kilku publicznych źródeł. Zewnętrzne listy mogą być niekompletne lub niedostępne; zaimportowane pozycje zawsze trafiają do kolejki oczekującej, nigdy nie są automatycznie publikowane. Nie są tworzone fikcyjne huby. Możesz też dodawać je ręcznie z panelu.
 
-Weryfikacja dostępności: 3 października 2026. Używane są publiczne feedy HTTPS:
+## Panel i funkcje
 
-- [Team Elite](https://www.te-home.net/?do=hublist&get=hublist.xml) — XML
-- [dchublist.org](https://dchublist.org/hublist.xml) — XML
-- [Public DC Hublist / PWiAM](https://hublist.pwiam.com/hublist.json) — JSON
-- [dchublist.biz](https://dchublist.biz/?do=hublist&get=hublist.xml) — XML
-- [dchublists.com](https://dchublists.com/?do=hublist&get=hublist.xml) — XML
-- [dchublist.ru](https://dchublist.ru/hublist.xml.bz2) — BZip2 i XML po rozpakowaniu; wymaga rozszerzenia `bz2`
+- `admin.php` — logowanie, moderacja zgłoszeń, dodawanie, edycja i usuwanie hubów oraz pozycji katalogu, konfiguracja nicka pingera i zmiana hasła administratora;
+- `index.php` — wyszukiwanie i filtrowanie, do 30 hubów na stronę, szczegóły, port, kraj, status TLS, ping, uptime i dostępne statystyki;
+- publiczny formularz zgłoszenia — zgłoszenie pozostaje ukryte do zatwierdzenia; strona pokazuje maksymalnie pięć najnowszych oczekujących;
+- katalog download — linki klientów Direct Connect i serwerów są edytowalne w panelu i prowadzą do wskazanych stron HTTPS;
+- `imports.php` — ręczny import dostępnych feedów do moderacji;
+- `pinger.php` — skrypt CLI, loguje się pod skonfigurowanym nickiem (bot jest widoczny na hubie), sprawdza NMDC/ADC oraz TLS i zapisuje historię. Huby wymagające hasła lub odrzucające pingera nie będą omijane; ich stan będzie pokazany jako błąd.
 
-To zestaw znanych i sprawdzonych źródeł, a nie gwarancja znalezienia każdej istniejącej hublisty. Nieaktualne lub niedziałające listy nie są automatycznie włączane. Wpisy i status „online” pochodzą od dostawców; strona nie testuje niezależnie każdego huba.
+Pinger nie gwarantuje danych, których hub nie udostępnia. Brak statystyki pozostaje pusty, nie jest zgadywany. Pinger wymaga publicznego adresu IP huba i blokuje adresy prywatne/lokalne.
 
-## Uwagi
+## Cron — uruchamianie co 48 minut
 
-- Dane z feedów zewnętrznych są traktowane jako niezaufane i kodowane przed wyświetleniem.
-- Lista hubów jest publiczna. Kliknięcie adresu może uruchomić klienta Direct Connect.
-- Instalacja rozszerzenia `bz2` jest opcjonalna; pozostałe źródła działają bez niego.
+Wyrażenie `*/48 * * * *` **nie** oznacza równych odstępów 48 minut w cron. Aby zachować odstęp, dodaj poniższe pięć wpisów (zastąp ścieżkę do PHP i pliku):
+
+```cron
+0 0,4,8,12,16,20 * * * /usr/bin/php /sciezka/do/strony/pinger.php --limit=500
+48 0,4,8,12,16,20 * * * /usr/bin/php /sciezka/do/strony/pinger.php --limit=500
+36 1,5,9,13,17,21 * * * /usr/bin/php /sciezka/do/strony/pinger.php --limit=500
+24 2,6,10,14,18,22 * * * /usr/bin/php /sciezka/do/strony/pinger.php --limit=500
+12 3,7,11,15,19,23 * * * /usr/bin/php /sciezka/do/strony/pinger.php --limit=500
+```
+
+Cron używa strefy czasowej serwera. Ścieżkę do PHP CLI oraz katalogu strony sprawdź w panelu hostingu. `--limit=500` ogranicza maksymalną liczbę hubów w jednym przebiegu; sam przebieg ma dodatkowy limit 240 sekund, więc przy dużej liczbie hubów reszta zostanie sprawdzona w kolejnych uruchomieniach.
+
+## Bezpieczeństwo i diagnostyka
+
+- Zmień hasło administratora po instalacji i używaj HTTPS dla całej strony.
+- Nie umieszczaj `config.php` w repozytorium ani nie publikuj jego zawartości.
+- Jeśli instalator nie może połączyć się z bazą, sprawdź nazwę bazy/użytkownika, uprawnienia i czy hosting zezwala na połączenia PDO MySQL. Po naprawieniu konfiguracji można ponowić instalację.
+- Jeśli pinger nie działa, sprawdź log wyjściowy zadania cron, rozszerzenia OpenSSL/Hash oraz limity połączeń wychodzących hostingu.
+- Testy lokalnych parserów i protokołu NMDC uruchomisz poleceniem `php tests/pinger_protocols.php`.
 
 ## Licencja
 
