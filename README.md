@@ -53,7 +53,7 @@ Cron używa strefy czasowej serwera. Ścieżkę do PHP CLI oraz katalogu strony 
 - Nie umieszczaj `config.php` w repozytorium ani nie publikuj jego zawartości.
 - Jeśli instalator nie może połączyć się z bazą, sprawdź nazwę bazy/użytkownika, uprawnienia i czy hosting zezwala na połączenia PDO MySQL. Po naprawieniu konfiguracji można ponowić instalację.
 - Jeśli pinger nie działa, sprawdź log wyjściowy zadania cron, rozszerzenia OpenSSL/Hash oraz limity połączeń wychodzących hostingu.
-- Testy lokalnych parserów i protokołu NMDC uruchomisz poleceniem `php tests/pinger_protocols.php`.
+- Testy lokalnych parserów i protokołu NMDC uruchomisz poleceniem `php pinger_protocols.php`.
 
 ## Licencja
 
