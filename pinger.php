@@ -519,12 +519,12 @@ function run_pinger(): void
     }
     $profile = [
         'description' => sanitize_nmdc_profile_field((string) ($storedSettings['pinger_description'] ?? 'Hublist pinger')),
-        'version' => sanitize_nmdc_profile_field((string) ($storedSettings['pinger_version'] ?? '1.0')),
+        'version' => sanitize_nmdc_profile_field((string) ($storedSettings['pinger_version'] ?? '1,0091')),
         'email' => sanitize_nmdc_profile_field((string) ($storedSettings['pinger_email'] ?? '')),
         'connection' => sanitize_nmdc_profile_field((string) ($storedSettings['pinger_connection'] ?? 'DSL')),
     ];
     if ($profile['version'] === '') {
-        $profile['version'] = '1.0';
+        $profile['version'] = '1,0091';
     }
     $limit = 100;
     global $argv;

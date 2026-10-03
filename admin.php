@@ -198,8 +198,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (utf8_length($description) === null || utf8_length($description) > 80 || !$safeProfileField($description)) {
                     throw new InvalidArgumentException('Opis pingera może mieć maksymalnie 80 znaków i nie może zawierać znaków sterujących ani separatorów protokołu.');
                 }
-                if (!preg_match('/^[A-Za-z0-9 ._+()\-]{1,40}$/', $version)) {
-                    throw new InvalidArgumentException('Wersja klienta może mieć 1–40 znaków: litery, cyfry, spacje oraz . _ + ( ) -.');
+                if (!preg_match('/^[A-Za-z0-9 ,._+()\-]{1,40}$/', $version)) {
+                    throw new InvalidArgumentException('Wersja klienta może mieć 1–40 znaków: litery, cyfry, spacje oraz , . _ + ( ) -.');
                 }
                 if ($email !== '' && (filter_var($email, FILTER_VALIDATE_EMAIL) === false || strlen($email) > 254 || !$safeProfileField($email))) {
                     throw new InvalidArgumentException('Podaj prawidłowy adres e-mail albo pozostaw pole puste.');
@@ -297,7 +297,7 @@ $downloadCategoryRows = download_category_details();
 $pingerSettings = [
     'pinger_nick' => 'Hublist-Pinger',
     'pinger_description' => 'Hublist pinger',
-    'pinger_version' => '1.0',
+    'pinger_version' => '1,0091',
     'pinger_email' => '',
     'pinger_connection' => 'DSL',
     'pinger_interval' => '48',
