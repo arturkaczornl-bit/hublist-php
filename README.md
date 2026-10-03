@@ -12,6 +12,10 @@ Polska hublista Direct Connect pod domenę `hublist.pl`, napisana w PHP i MySQL.
 
 Composer nie jest wymagany. Rozszerzenie BZip2 jest potrzebne do pobierania skompresowanego feedu `.bz2`.
 
+## Statystyki odwiedzin i blokowanie IP
+
+Panel administratora (`admin.php?tab=visitors`) pokazuje sesje z aktywnością w ciągu ostatnich 5 minut, ich adresy IP i aktualnie przeglądane strony. Aktywna karta odświeża heartbeat co minutę. Historia ostatnich 200 odsłon jest automatycznie usuwana po 30 dniach. Adresy IP są widoczne wyłącznie dla administratora. Ban blokuje dokładny adres IPv4 lub IPv6 na publicznych stronach serwisu i pozostaje aktywny do ręcznego odblokowania; panel administracyjny pozostaje dostępny dla administratora. Blokada może dotknąć wiele osób za wspólnym adresem IP. Pomiar bazuje na sesyjnych plikach cookie i adresie połączenia widzianym przez serwer; liczba sesji nie jest liczbą zweryfikowanych osób. Informacja o tych danych znajduje się w regulaminie.
+
 ## Instalacja
 
 1. Wgraj pliki aplikacji do katalogu strony WWW.
@@ -24,8 +28,10 @@ Instalator próbuje zaimportować huby z kilku publicznych źródeł. Zewnętrzn
 
 ## Panel i funkcje
 
-- `admin.php` — logowanie, moderacja zgłoszeń, dodawanie, edycja i usuwanie hubów oraz pozycji katalogu, konfiguracja nicka pingera i zmiana hasła administratora;
-- `index.php` — wyszukiwanie i filtrowanie, do 30 hubów na stronę, szczegóły, port, kraj, status TLS, ping, uptime i dostępne statystyki;
+- `admin.php` — logowanie, moderacja zgłoszeń, zarządzanie hubami i Pobieralnią, ustawienia pingera, statystyki aktywnych sesji, historia odwiedzin i blokowanie adresów IP;
+- `index.php` — wyszukiwarka hubów z filtrami tekstu/adresu/portu, protokołu NMDC/ADC/TLS, kraju, statusu, serwera, liczby użytkowników, share i certyfikatu; sortowanie po popularności, share, dostępności, pingu, dacie sprawdzenia lub nazwie;
+- `stats.php` — publiczny ranking dostępności hubów w ostatnich 30 dniach z liczbą pomiarów i czasem ostatniego sprawdzenia przez pingera;
+- `visitor_ping.php` — odświeżanie aktywności sesji odwiedzającego bez dopisywania kolejnego wejścia do historii;
 - `hub.php?id=...` — publiczne szczegóły zatwierdzonego huba: opis i temat odczytany przez pinger, adres/port, protokół, kraj, ikona ustawiana przez administratora, liczba użytkowników, share, ping, TLS i dostępność z 30 dni. Ulubione są zapisywane lokalnie w przeglądarce;
 - `hublist.xml` i `hublist.xml.bz2` — pobieralny feed zatwierdzonych hubów, do użycia w ustawieniach klienta DC. Warianty bez mod_rewrite są dostępne przez `feed.php?format=xml` i `feed.php?format=bz2`;
 - `about.php`, `faq.php` i `rules.php` — informacja o serwisie, przewodnik po Direct Connect i zasady katalogu;

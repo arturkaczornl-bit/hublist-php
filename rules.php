@@ -46,7 +46,8 @@ page_start('Regulamin Hublist.pl');
     </section>
     <section class="panel">
         <h2>7. Zgłoszenia problemów</h2>
-        <p>W sprawie nieprawidłowego wpisu, naruszenia praw lub bezpieczeństwa skontaktuj się z administratorem strony przez kanał kontaktowy udostępniony na jej stronie głównej. Ten regulamin dotyczy serwisu Hublist.pl; nie zastępuje regulaminu huba ani porady prawnej.</p>
+        <p>Serwis zapisuje adres IP, identyfikator sesji przeglądarki i odwiedzone adresy stron w celu prowadzenia statystyk aktywności oraz ochrony przed nadużyciami. Pełne adresy IP i historia są dostępne wyłącznie administratorowi; historia odsłon jest automatycznie usuwana po 30 dniach. Adresy zablokowane z powodu nadużyć są przechowywane do czasu ręcznego zdjęcia blokady. Serwis używa sesyjnego pliku cookie do rozróżniania aktywnych sesji przeglądarki.</p>
+        <p>W sprawie nieprawidłowego wpisu, naruszenia praw, bezpieczeństwa lub danych skontaktuj się z administratorem strony przez kanał kontaktowy udostępniony na jej stronie głównej. Ten regulamin dotyczy serwisu Hublist.pl; nie zastępuje regulaminu huba ani porady prawnej.</p>
     </section>
     <section class="panel">
         <h2>8. Prawa do serwisu</h2>

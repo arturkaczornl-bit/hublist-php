@@ -48,7 +48,137 @@ function db(): PDO
     ]);
     upgrade_download_catalog($pdo);
     upgrade_hub_details($pdo);
+    upgrade_visitor_tracking($pdo);
+    enforce_ip_ban($pdo);
     return $pdo;
+}
+
+function upgrade_visitor_tracking(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+    $pdo->exec("CREATE TABLE IF NOT EXISTS visitor_sessions (
+        session_key CHAR(64) NOT NULL PRIMARY KEY,
+        ip_address VARCHAR(45) NOT NULL,
+        current_path VARCHAR(255) NOT NULL,
+        first_seen DATETIME NOT NULL,
+        last_seen DATETIME NOT NULL,
+        INDEX idx_visitors_active (last_seen),
+        INDEX idx_visitors_ip (ip_address)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS visitor_history (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        session_key CHAR(64) NOT NULL,
+        ip_address VARCHAR(45) NOT NULL,
+        path VARCHAR(255) NOT NULL,
+        visited_at DATETIME NOT NULL,
+        INDEX idx_visitor_history_date (visited_at),
+        INDEX idx_visitor_history_ip_date (ip_address, visited_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS ip_bans (
+        ip_address VARCHAR(45) NOT NULL PRIMARY KEY,
+        reason VARCHAR(255) NOT NULL DEFAULT '',
+        created_at DATETIME NOT NULL,
+        INDEX idx_ip_bans_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
+function visitor_request_path(): string
+{
+    $path = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+    $path = is_string($path) && str_starts_with($path, '/') ? $path : '/';
+    $path = preg_replace('/[\x00-\x20\x7F]/', '', $path) ?? '/';
+    $path = preg_replace_callback('/[^\x21-\x7E]/', static fn(array $match): string => rawurlencode($match[0]), $path) ?? '/';
+    $parts = [];
+    foreach (['id', 'page'] as $key) {
+        $value = filter_var(is_string($_GET[$key] ?? null) ? $_GET[$key] : '', FILTER_VALIDATE_INT);
+        if ($value !== false && $value > 0) {
+            $parts[$key] = (string) $value;
+        }
+    }
+    $category = is_string($_GET['category'] ?? null) ? $_GET['category'] : '';
+    if (preg_match('/^[a-z0-9_-]{1,24}$/', $category)) {
+        $parts['category'] = $category;
+    }
+    if ($parts !== []) {
+        $path .= '?' . http_build_query($parts);
+    }
+    return substr($path, 0, 255);
+}
+
+function normalize_ip_address(string $ip): ?string
+{
+    if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+        return null;
+    }
+    $packed = inet_pton($ip);
+    if ($packed === false) {
+        return null;
+    }
+    $normalized = inet_ntop($packed);
+    return $normalized === false ? null : $normalized;
+}
+
+function enforce_ip_ban(PDO $pdo): void
+{
+    $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    if (in_array($script, ['admin.php', 'setup.php'], true) || PHP_SAPI === 'cli') {
+        return;
+    }
+    $ip = normalize_ip_address((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+    if ($ip === null) {
+        return;
+    }
+    $ban = $pdo->prepare('SELECT 1 FROM ip_bans WHERE ip_address=? LIMIT 1');
+    $ban->execute([$ip]);
+    if ($ban->fetchColumn()) {
+        http_response_code(403);
+        header('Content-Type: text/html; charset=UTF-8');
+        echo '<!doctype html><html lang="pl"><meta charset="utf-8"><title>Dostęp zablokowany</title>'
+            . '<p>Dostęp do serwisu z tego adresu IP został zablokowany.</p></html>';
+        exit;
+    }
+}
+
+function track_visitor_request(): void
+{
+    $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'index.php'));
+    if ($script === 'admin.php' || $script === 'setup.php' || PHP_SAPI === 'cli'
+        || strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'GET') {
+        return;
+    }
+
+    $ip = normalize_ip_address((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+    if ($ip === null) {
+        return;
+    }
+
+    $pdo = db();
+    start_app_session();
+    $config = app_config();
+    $sessionKey = hash_hmac('sha256', session_id(), $config['db_password'] . $config['db_name']);
+    $path = visitor_request_path();
+    $now = gmdate('Y-m-d H:i:s');
+    $session = $pdo->prepare(
+        'INSERT INTO visitor_sessions (session_key,ip_address,current_path,first_seen,last_seen)
+         VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE ip_address=VALUES(ip_address),
+         current_path=VALUES(current_path),last_seen=VALUES(last_seen)'
+    );
+    $session->execute([$sessionKey, $ip, $path, $now, $now]);
+    $history = $pdo->prepare('INSERT INTO visitor_history (session_key,ip_address,path,visited_at) VALUES (?,?,?,?)');
+    $history->execute([$sessionKey, $ip, $path, $now]);
+
+    $cleanup = $pdo->query("SELECT setting_value FROM app_settings WHERE setting_key='visitor_cleanup_at'")->fetchColumn();
+    if (!is_string($cleanup) || strtotime($cleanup . ' UTC') < time() - 86400) {
+        $pdo->exec('DELETE FROM visitor_history WHERE visited_at < UTC_TIMESTAMP() - INTERVAL 30 DAY');
+        $pdo->exec('DELETE FROM visitor_sessions WHERE last_seen < UTC_TIMESTAMP() - INTERVAL 30 DAY');
+        $saveCleanup = $pdo->prepare("INSERT INTO app_settings (setting_key,setting_value) VALUES ('visitor_cleanup_at',?)
+            ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)");
+        $saveCleanup->execute([$now]);
+    }
 }
 
 function upgrade_hub_details(PDO $pdo): void
@@ -510,6 +640,7 @@ function security_headers(): void
 function page_start(string $title): void
 {
     security_headers();
+    track_visitor_request();
     $script = basename((string) ($_SERVER['SCRIPT_NAME'] ?? 'index.php'));
     $canonicalPath = $script === 'index.php' ? '/' : '/' . rawurlencode($script);
     $canonicalParams = [];
@@ -552,7 +683,7 @@ function page_start(string $title): void
             @media(max-width:760px){.top-inner{align-items:flex-start;flex-direction:column}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid,.hub-detail-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
         </style>
     </head>
-    <body><div class="top"><div class="top-inner"><a class="brand" href="index.php" aria-label="Hublist.pl — polska hublista Direct Connect"><span class="brand-mark" aria-hidden="true"></span><span>Hublist<span class="brand-domain">.pl</span></span></a><nav class="nav" aria-label="Menu główne"><a href="index.php">Hublista</a><a href="add_hub.php">Dodaj hub</a><a href="download.php">Pobieralnia</a><a href="feed.php?format=xml">Feed XML</a><a href="about.php">O nas</a><a href="faq.php">FAQ</a><a href="rules.php">Regulamin</a><a href="admin.php">Administracja</a></nav></div></div>
+    <body><div class="top"><div class="top-inner"><a class="brand" href="index.php" aria-label="Hublist.pl — polska hublista Direct Connect"><span class="brand-mark" aria-hidden="true"></span><span>Hublist<span class="brand-domain">.pl</span></span></a><nav class="nav" aria-label="Menu główne"><a href="index.php">Hublista</a><a href="stats.php">Statystyki</a><a href="add_hub.php">Dodaj hub</a><a href="download.php">Pobieralnia</a><a href="feed.php?format=xml">Feed XML</a><a href="about.php">O nas</a><a href="faq.php">FAQ</a><a href="rules.php">Regulamin</a><a href="admin.php">Administracja</a></nav></div></div>
     <?php
 }
 
@@ -560,6 +691,14 @@ function page_end(): void
 {
     ?>
     <footer><div class="footer-brand"><p><strong>Hublist.pl</strong> — polska hublista Direct Connect. Łączymy społeczność, promujemy otwarte huby i wspieramy polską scenę DC.</p><p><a href="about.php">O serwisie</a> · <a href="faq.php">FAQ</a> · <a href="rules.php">Regulamin</a> · <a href="download.php">Pobieralnia</a> · <a href="admin.php">Administracja</a></p><p class="footer-rights">© <?= date('Y') ?> Hublist.pl. <strong>Wszelkie prawa zastrzeżone</strong> do oryginalnych treści, projektu graficznego, logo i układu serwisu. Kopiowanie lub ponowne publikowanie całości serwisu albo jego istotnych części wymaga zgody administratora. Nazwy, znaki i oprogramowanie podmiotów trzecich należą do ich właścicieli.</p></div></footer>
+    <script>
+        window.setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                fetch('visitor_ping.php', {method: 'POST', credentials: 'same-origin', keepalive: true})
+                    .catch(error => console.warn('Hublist visitor heartbeat failed.', error));
+            }
+        }, 60000);
+    </script>
     </body></html>
     <?php
 }

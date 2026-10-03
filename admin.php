@@ -183,6 +183,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $pdo->prepare('DELETE FROM downloads WHERE id=?')->execute([$id]);
                 $notice = 'Wpis katalogu został usunięty.';
+            } elseif ($action === 'ban_ip') {
+                $ip = normalize_ip_address(trim(post_string($_POST, 'ip_address')));
+                if ($ip === null) {
+                    throw new InvalidArgumentException('Podaj prawidłowy adres IPv4 lub IPv6.');
+                }
+                $reason = trim(post_string($_POST, 'reason'));
+                if (utf8_length($reason) === null || utf8_length($reason) > 255) {
+                    throw new InvalidArgumentException('Powód blokady może mieć maksymalnie 255 znaków.');
+                }
+                $stmt = $pdo->prepare('INSERT INTO ip_bans (ip_address,reason,created_at) VALUES (?,?,UTC_TIMESTAMP())
+                    ON DUPLICATE KEY UPDATE reason=VALUES(reason),created_at=VALUES(created_at)');
+                $stmt->execute([$ip, $reason]);
+                $pdo->prepare('DELETE FROM visitor_sessions WHERE ip_address=?')->execute([$ip]);
+                $notice = 'Adres IP został zablokowany.';
+            } elseif ($action === 'unban_ip') {
+                $ip = normalize_ip_address(trim(post_string($_POST, 'ip_address')));
+                if ($ip === null) {
+                    throw new InvalidArgumentException('Nieprawidłowy adres IP.');
+                }
+                $stmt = $pdo->prepare('DELETE FROM ip_bans WHERE ip_address=?');
+                $stmt->execute([$ip]);
+                $notice = $stmt->rowCount() ? 'Blokada adresu IP została zdjęta.' : 'Nie znaleziono takiej blokady.';
             } elseif ($action === 'save_settings') {
                 $nick = trim(post_string($_POST, 'pinger_nick'));
                 if (!preg_match('/^[A-Za-z0-9_.-]{3,32}$/', $nick)) {
@@ -268,7 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $tab = is_string($_GET['tab'] ?? null) ? $_GET['tab'] : 'pending';
-if (!in_array($tab, ['pending', 'hubs', 'downloads', 'settings'], true)) {
+if (!in_array($tab, ['pending', 'hubs', 'downloads', 'visitors', 'settings'], true)) {
     $tab = 'pending';
 }
 
@@ -294,6 +316,48 @@ $hubRows = $pdo->query("SELECT * FROM hubs WHERE status <> 'rejected' ORDER BY s
 $downloadRows = $pdo->query('SELECT * FROM downloads ORDER BY category, sort_order, name')->fetchAll();
 $downloadCategories = download_categories();
 $downloadCategoryRows = download_category_details();
+$activeVisitors = [];
+$visitorHistory = [];
+$bannedIps = [];
+$activeVisitorCount = 0;
+$visitorHistoryCount = 0;
+$visitorHistoryPages = 1;
+$visitorHistoryPage = 1;
+$visitorHistoryIpRaw = substr(trim(is_string($_GET['history_ip'] ?? null) ? $_GET['history_ip'] : ''), 0, 45);
+$visitorHistoryIp = normalize_ip_address($visitorHistoryIpRaw);
+$visitorHistoryIpFilter = $visitorHistoryIpRaw !== '';
+$visitorHistoryIpQuery = $visitorHistoryIp ?? $visitorHistoryIpRaw;
+if ($tab === 'visitors') {
+    $activeVisitors = $pdo->query(
+        'SELECT ip_address,current_path,first_seen,last_seen FROM visitor_sessions
+         WHERE last_seen >= UTC_TIMESTAMP() - INTERVAL 5 MINUTE ORDER BY last_seen DESC LIMIT 100'
+    )->fetchAll();
+    $activeVisitorCount = (int) $pdo->query(
+        'SELECT COUNT(*) FROM visitor_sessions WHERE last_seen >= UTC_TIMESTAMP() - INTERVAL 5 MINUTE'
+    )->fetchColumn();
+    $rawHistoryPage = filter_var(is_string($_GET['history_page'] ?? null) ? $_GET['history_page'] : '1', FILTER_VALIDATE_INT);
+    $visitorHistoryPage = $rawHistoryPage === false ? 1 : max(1, $rawHistoryPage);
+    if ($visitorHistoryIpFilter) {
+        $historyCount = $pdo->prepare('SELECT COUNT(*) FROM visitor_history WHERE ip_address=?');
+        $historyCount->execute([$visitorHistoryIpQuery]);
+        $visitorHistoryCount = (int) $historyCount->fetchColumn();
+    } else {
+        $visitorHistoryCount = (int) $pdo->query('SELECT COUNT(*) FROM visitor_history')->fetchColumn();
+    }
+    $visitorHistoryPages = max(1, (int) ceil($visitorHistoryCount / 100));
+    $visitorHistoryPage = min($visitorHistoryPage, $visitorHistoryPages);
+    $historyOffset = ($visitorHistoryPage - 1) * 100;
+    if ($visitorHistoryIpFilter) {
+        $historyStmt = $pdo->prepare("SELECT ip_address,path,visited_at FROM visitor_history
+            WHERE ip_address=? ORDER BY visited_at DESC LIMIT 100 OFFSET $historyOffset");
+        $historyStmt->execute([$visitorHistoryIpQuery]);
+        $visitorHistory = $historyStmt->fetchAll();
+    } else {
+        $visitorHistory = $pdo->query("SELECT ip_address,path,visited_at FROM visitor_history
+            ORDER BY visited_at DESC LIMIT 100 OFFSET $historyOffset")->fetchAll();
+    }
+    $bannedIps = $pdo->query('SELECT ip_address,reason,created_at FROM ip_bans ORDER BY created_at DESC LIMIT 200')->fetchAll();
+}
 $pingerSettings = [
     'pinger_nick' => 'Hublist-Pinger',
     'pinger_description' => 'Hublist pinger',
@@ -336,6 +400,7 @@ page_start('Panel administracyjny');
             <a href="?tab=pending">Oczekujące (<?= count($pending) ?>)</a>
             <a href="?tab=hubs">Huby</a>
             <a href="?tab=downloads">Pobieralnia</a>
+            <a href="?tab=visitors">Odwiedzający</a>
             <a href="?tab=settings">Ustawienia</a>
         </nav>
         <form method="post" style="justify-content:flex-end">
@@ -459,6 +524,61 @@ page_start('Panel administracyjny');
                     </form>
                 <?php endif;
             endforeach; ?>
+        </section>
+    <?php elseif ($tab === 'visitors'): ?>
+        <section class="panel">
+            <h2>Odwiedzający online: <?= $activeVisitorCount ?></h2>
+            <p class="note">Aktywność oznacza odsłonę lub heartbeat w ciągu ostatnich 5 minut. Wyświetlamy do 100 aktywnych sesji; pełny licznik jest powyżej. Adresy IP i historia są widoczne wyłącznie w panelu administratora, a historia jest automatycznie usuwana po 30 dniach. Liczba online oznacza sesje przeglądarki, nie zweryfikowane osoby. Blokada dokładnego IP może objąć też inne osoby korzystające z tego samego łącza.</p>
+            <?php if ($activeVisitors === []): ?><p class="empty">Brak aktywnych odwiedzających.</p><?php else: ?>
+            <div class="table-wrap"><table><thead><tr><th>Adres IP</th><th>Aktualnie przegląda</th><th>Pierwsza wizyta</th><th>Ostatnia aktywność</th><th>Blokada</th></tr></thead><tbody>
+            <?php foreach ($activeVisitors as $visitor): ?><tr>
+                <td class="address"><?= e($visitor['ip_address']) ?></td>
+                <td><code><?= e($visitor['current_path']) ?></code></td>
+                <td><?= e(utc_datetime($visitor['first_seen'])) ?></td>
+                <td><?= e(utc_datetime($visitor['last_seen'])) ?></td>
+                <td><form method="post" onsubmit="return confirm('Zablokować ten adres IP?');">
+                    <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="action" value="ban_ip">
+                    <input type="hidden" name="ip_address" value="<?= e($visitor['ip_address']) ?>"><button class="secondary" type="submit">Zablokuj IP</button>
+                </form></td>
+            </tr><?php endforeach; ?>
+            </tbody></table></div><?php endif; ?>
+        </section>
+        <section class="panel"><h2>Zablokuj adres IP</h2>
+            <form method="post" class="grid" onsubmit="return confirm('Zablokować dostęp z podanego adresu IP?');">
+                <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="action" value="ban_ip">
+                <label class="field">Adres IPv4 lub IPv6<input name="ip_address" maxlength="45" required placeholder="203.0.113.10"></label>
+                <label class="field">Powód (opcjonalnie)<input name="reason" maxlength="255"></label>
+                <div class="field"><button type="submit">Zablokuj IP</button></div>
+            </form>
+        </section>
+        <section class="panel"><h2>Zablokowane adresy IP</h2>
+            <?php if ($bannedIps === []): ?><p class="empty">Brak zablokowanych adresów.</p><?php else: ?>
+            <div class="table-wrap"><table><thead><tr><th>Adres IP</th><th>Powód</th><th>Dodano</th><th>Akcja</th></tr></thead><tbody>
+            <?php foreach ($bannedIps as $ban): ?><tr>
+                <td class="address"><?= e($ban['ip_address']) ?></td><td><?= e($ban['reason'] !== '' ? $ban['reason'] : '—') ?></td>
+                <td><?= e(utc_datetime($ban['created_at'])) ?></td><td><form method="post">
+                    <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="action" value="unban_ip">
+                    <input type="hidden" name="ip_address" value="<?= e($ban['ip_address']) ?>"><button class="secondary" type="submit">Odblokuj</button>
+                </form></td>
+            </tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
+        </section>
+        <section class="panel"><h2>Historia odwiedzin (<?= number_format($visitorHistoryCount, 0, ',', ' ') ?> odsłon)</h2>
+            <form method="get" class="actions">
+                <input type="hidden" name="tab" value="visitors">
+                <label>Filtruj historię po IP <input name="history_ip" maxlength="45" value="<?= e($visitorHistoryIpRaw) ?>" placeholder="IPv4 lub IPv6"></label>
+                <button type="submit">Filtruj</button><a href="?tab=visitors">Wyczyść</a>
+            </form>
+            <?php if ($visitorHistoryIpRaw !== '' && $visitorHistoryIp === null): ?><p class="error">Podany filtr nie jest prawidłowym adresem IPv4 ani IPv6.</p><?php endif; ?>
+            <?php if ($visitorHistory === []): ?><p class="empty">Brak zapisanej historii.</p><?php else: ?>
+            <div class="table-wrap"><table><thead><tr><th>Data i czas</th><th>Adres IP</th><th>Odwiedzona strona</th></tr></thead><tbody>
+            <?php foreach ($visitorHistory as $visit): ?><tr>
+                <td><?= e(utc_datetime($visit['visited_at'])) ?></td><td class="address"><?= e($visit['ip_address']) ?></td><td><code><?= e($visit['path']) ?></code></td>
+            </tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
+            <?php if ($visitorHistoryPages > 1): ?><nav class="pager" aria-label="Strony historii">
+                <?php if ($visitorHistoryPage > 1): ?><a href="?<?= e(http_build_query(['tab' => 'visitors', 'history_ip' => $visitorHistoryIpRaw, 'history_page' => $visitorHistoryPage - 1])) ?>">← Nowsze</a><?php endif; ?>
+                <span class="muted">Strona <?= $visitorHistoryPage ?> z <?= $visitorHistoryPages ?></span>
+                <?php if ($visitorHistoryPage < $visitorHistoryPages): ?><a href="?<?= e(http_build_query(['tab' => 'visitors', 'history_ip' => $visitorHistoryIpRaw, 'history_page' => $visitorHistoryPage + 1])) ?>">Starsze →</a><?php endif; ?>
+            </nav><?php endif; ?>
         </section>
     <?php else: ?>
         <section class="panel"><h2>Import znanych list publicznych</h2>

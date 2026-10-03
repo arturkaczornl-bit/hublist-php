@@ -25,6 +25,11 @@ expect(protocol_badge_class('ADC') === 'protocol-adc', 'ADC should use a distinc
 expect(protocol_badge_class('ADCS') === 'protocol-adcs', 'ADCS should use a distinct protocol badge.');
 expect(protocol_badge_class('DCHUB') === 'protocol-dchub', 'DCHUB should use a distinct protocol badge.');
 expect(protocol_badge_class('NMDCS') === 'protocol-nmdcs', 'NMDCS should use a distinct protocol badge.');
+expect(normalize_ip_address('2001:0db8:0:0:0:0:0:1') === '2001:db8::1', 'IPv6 addresses should be normalized consistently.');
+expect(normalize_ip_address('not-an-ip') === null, 'Invalid visitor IP addresses should be rejected.');
+$_SERVER['REQUEST_URI'] = '/hub.php?id=7&token=private';
+$_GET = ['id' => '7', 'token' => 'private'];
+expect(visitor_request_path() === '/hub.php?id=7', 'Visitor history should keep useful page identifiers but omit unrelated query values.');
 $iconHub = normalize_hub_input([
     'name' => 'Hub z ikoną',
     'protocol' => 'adc',
