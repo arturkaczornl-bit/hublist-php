@@ -248,12 +248,19 @@ function upgrade_hub_details(PDO $pdo): void
         'icon_url' => "ALTER TABLE hubs ADD icon_url VARCHAR(500) NULL",
         'country_source' => "ALTER TABLE hubs ADD country_source VARCHAR(12) NULL",
         'country_ip' => "ALTER TABLE hubs ADD country_ip VARCHAR(45) NULL",
+        'owner_token_hash' => "ALTER TABLE hubs ADD owner_token_hash CHAR(64) NULL",
+        'owner_ping_at' => "ALTER TABLE hubs ADD owner_ping_at DATETIME NULL",
     ];
     foreach ($columns as $name => $statement) {
         if (!$pdo->query("SHOW COLUMNS FROM hubs LIKE " . $pdo->quote($name))->fetch()) {
             $pdo->exec($statement);
         }
     }
+    $pdo->exec("CREATE TABLE IF NOT EXISTS hub_owner_ping_limits (
+        ip_hash CHAR(64) NOT NULL PRIMARY KEY,
+        last_ping_at DATETIME NOT NULL,
+        INDEX idx_owner_ping_limits_time (last_ping_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
 
 function download_categories(): array

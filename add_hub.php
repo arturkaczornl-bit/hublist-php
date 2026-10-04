@@ -6,6 +6,8 @@ start_app_session();
 $pdo = db();
 $message = '';
 $error = '';
+$ownerToken = null;
+$ownerHubId = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && post_string($_POST, 'action') === 'submit_hub') {
     require_csrf();
@@ -29,25 +31,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && post_string($_POST, 'action') === '
             throw new InvalidArgumentException('Ten adres został już zgłoszony lub znajduje się na liście.');
         }
 
+        $ownerToken = bin2hex(random_bytes(32));
         $pdo->beginTransaction();
-        $insert = $pdo->prepare('INSERT INTO hubs (name, protocol, host, port, country, country_source, description, software, website, status) VALUES (?, ?, ?, ?, ?, IF(? IS NULL,NULL,"manual"), ?, ?, ?, "pending")');
+        $insert = $pdo->prepare('INSERT INTO hubs (name, protocol, host, port, country, country_source, description, software, website, status, owner_token_hash) VALUES (?, ?, ?, ?, ?, IF(? IS NULL,NULL,"manual"), ?, ?, ?, "pending", ?)');
         $insert->execute([
             $hub['name'], $hub['protocol'], $hub['host'], $hub['port'],
             $hub['country'], $hub['country'], $hub['description'], $hub['software'], $hub['website'],
+            hash('sha256', $ownerToken),
         ]);
+        $ownerHubId = (int) $pdo->lastInsertId();
+        $_SESSION['owner_hub_tokens'][$ownerHubId] = $ownerToken;
         $saveSubmission = $pdo->prepare('INSERT INTO submissions (ip_hash) VALUES (?)');
         $saveSubmission->execute([$ipHash]);
         $pdo->commit();
-        $message = 'Dziękujemy! Zgłoszenie trafiło do kolejki weryfikacji administratora.';
+        $message = 'Dziękujemy! Zgłoszenie trafiło do kolejki weryfikacji administratora. Hub możesz pingować prywatnym kodem właściciela poniżej.';
     } catch (InvalidArgumentException $exception) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
+        $ownerToken = null;
+        $ownerHubId = null;
         $error = $exception->getMessage();
     } catch (Throwable $exception) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
+        $ownerToken = null;
+        $ownerHubId = null;
         error_log('Hublist submission failed: ' . $exception->getMessage());
         $error = 'Nie udało się zapisać zgłoszenia. Spróbuj ponownie później.';
     }
@@ -66,6 +76,14 @@ page_start('Dodaj hub — zgłoszenie do Hublist.pl');
         <p class="muted">Podaj publiczny adres huba i informacje przeznaczone do publikacji. Nie zgłaszaj prywatnych adresów ani danych osobowych.</p>
         <?php if ($message !== ''): ?><p class="success"><?= e($message) ?></p><?php endif; ?>
         <?php if ($error !== ''): ?><p class="error"><?= e($error) ?></p><?php endif; ?>
+        <?php if ($ownerToken !== null && $ownerHubId !== null): ?>
+            <div class="note">
+                <strong>Zapisz prywatny kod właściciela</strong>
+                <p>Umożliwia pingowanie tego huba. Zapisz go teraz i nie udostępniaj innym osobom.</p>
+                <p><code><?= e($ownerToken) ?></code></p>
+                <p><a href="hub_owner.php?id=<?= $ownerHubId ?>">Otwórz panel pingowania tego huba</a></p>
+            </div>
+        <?php endif; ?>
         <form method="post" class="grid">
             <input type="hidden" name="action" value="submit_hub">
             <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">

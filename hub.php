@@ -90,7 +90,7 @@ page_start($hub['name'] . ' — szczegóły huba');
             <div class="hub-detail"><strong>Udostępniane pliki (łączny rozmiar)</strong><span><?= e(pretty_bytes($hub['shared_bytes'] === null ? null : (int) $hub['shared_bytes'])) ?></span></div>
             <div class="hub-detail"><strong>Odpowiedź pingera</strong><span><?= $hub['ping_ms'] === null ? 'Brak danych' : (int) $hub['ping_ms'] . ' ms' ?></span></div>
             <div class="hub-detail"><strong>Dostępność z 30 dni</strong><span><?= e($uptime) ?> · <?= number_format((int) $hub['checks_30d'], 0, ',', ' ') ?> pomiarów</span></div>
-            <div class="hub-detail"><strong>Ostatni pomiar</strong><span><?= e(utc_datetime($hub['last_ping_at'])) ?></span></div>
+            <div class="hub-detail"><strong>Ostatnie sprawdzenie pingera</strong><span><?= $hub['last_ping_at'] === null ? 'Jeszcze nie sprawdzono' : e(utc_datetime($hub['last_ping_at'])) . ' (' . e(date_default_timezone_get()) . ')' ?></span></div>
             <div class="hub-detail"><strong>Źródło wpisu</strong><span><?= e($hub['imported_sources'] ?: 'Lista własna') ?></span></div>
             <div class="hub-detail"><strong>Połączenie TLS</strong><span><?php if (!$secure): ?>Protokół bez TLS
                 <?php elseif ($hub['tls_cert_valid'] === null): ?>Nie sprawdzono
@@ -100,6 +100,11 @@ page_start($hub['name'] . ' — szczegóły huba');
             <?php if ($hub['website']): ?><div class="hub-detail"><strong>Strona huba</strong><span><a href="<?= e($hub['website']) ?>" target="_blank" rel="noopener noreferrer"><?= e($hub['website']) ?></a></span></div><?php endif; ?>
         </div>
         <?php if ($hub['pinger_error']): ?><p class="note" style="margin-top:14px">Ostatni błąd pingera: <?= e($hub['pinger_error']) ?></p><?php endif; ?>
+    </section>
+    <section class="panel">
+        <h2>Właściciel huba?</h2>
+        <p>Użyj prywatnego kodu otrzymanego po zgłoszeniu, aby ręcznie uruchomić pomiar swojego huba. Możliwy jest jeden pomiar na hub co 5 minut.</p>
+        <p><a class="button secondary" href="hub_owner.php?id=<?= (int) $hub['id'] ?>">Otwórz panel właściciela i pinguj</a></p>
     </section>
 </main>
 <script>

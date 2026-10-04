@@ -121,6 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         hub_topic TEXT NULL,
                         online_users INT UNSIGNED NULL,
                         shared_bytes BIGINT UNSIGNED NULL,
+                        owner_token_hash CHAR(64) NULL,
+                        owner_ping_at DATETIME NULL,
                         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         verified_at DATETIME NULL,
                         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -166,6 +168,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ip_hash CHAR(64) NOT NULL,
                         submitted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         INDEX idx_submissions_ip_date (ip_hash, submitted_at)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+                    "CREATE TABLE IF NOT EXISTS hub_owner_ping_limits (
+                        ip_hash CHAR(64) NOT NULL PRIMARY KEY,
+                        last_ping_at DATETIME NOT NULL,
+                        INDEX idx_owner_ping_limits_time (last_ping_at)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
                     "CREATE TABLE IF NOT EXISTS admin_login_attempts (
                         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,

@@ -37,7 +37,8 @@ Instalator próbuje zaimportować huby z kilku publicznych źródeł. Zewnętrzn
 - `visitor_ping.php` — odświeżanie aktywności sesji odwiedzającego bez dopisywania kolejnego wejścia do historii;
 
 W zakładce **Menu** administrator może zmieniać etykietę, adres, kolejność i widoczność wbudowanych pozycji, dodawać własne odnośniki oraz usuwać własne pozycje. Dozwolone są lokalne strony PHP i zewnętrzne adresy HTTPS. Zmiany są od razu używane w głównym menu nagłówka.
-- `hub.php?id=...` — publiczne szczegóły zatwierdzonego huba: opis i temat odczytany przez pinger, adres/port, protokół, kraj, ikona ustawiana przez administratora, liczba użytkowników, share, ping, TLS i dostępność z 30 dni. Ulubione są zapisywane lokalnie w przeglądarce;
+- `hub.php?id=...` — publiczne szczegóły zatwierdzonego huba: opis i temat odczytany przez pinger, adres/port, protokół, kraj, ikona ustawiana przez administratora, liczba użytkowników, share, ping, TLS, dostępność z 30 dni oraz czas ostatniego sprawdzenia;
+- `hub_owner.php?id=...` i `hub_ping.php` — prywatne, ręczne pingowanie przez kod właściciela; po zgłoszeniu kod jest pokazany jednorazowo, przechowywany w bazie wyłącznie jako skrót i działa dla oczekujących oraz zatwierdzonych hubów. Do huba można wysłać jeden pomiar co 5 minut, a z jednego adresu IP jeden pomiar na minutę. Administrator może wygenerować nowy kod w zakładce zarządzania hubami. Kod należy przesyłać i wpisywać wyłącznie przez HTTPS;
 - `hublist.xml` i `hublist.xml.bz2` — pobieralny feed zatwierdzonych hubów, do użycia w ustawieniach klienta DC. Warianty bez mod_rewrite są dostępne przez `feed.php?format=xml` i `feed.php?format=bz2`;
 - `about.php`, `faq.php` i `rules.php` — informacja o serwisie, przewodnik po Direct Connect i zasady katalogu;
 - `add_hub.php` — osobna strona formularza zgłoszenia huba; zgłoszenie pozostaje ukryte do zatwierdzenia, strona główna pokazuje maksymalnie pięć najnowszych oczekujących;
@@ -69,6 +70,8 @@ W administracji ustaw odstęp (od 5 do 10080 minut) między sprawdzeniami tego s
 ```
 
 Zastąp ścieżkę do PHP i strony wartościami z hostingu. `--limit=500` ogranicza liczbę hubów w jednym przebiegu; sam przebieg ma limit 240 sekund, więc przy dużej liczbie hubów pozostałe zostaną sprawdzone przy następnych uruchomieniach. Panel strony nie może samodzielnie zmienić crona hostingu.
+
+Automatyczny pinger sprawdza wyłącznie zatwierdzone huby i wymaga działającego zadania cron. Bez crona automatyczne pomiary nie będą wykonywane. Właściciel może uruchomić pojedynczy pomiar ręcznie w prywatnym panelu kodem wydanym po zgłoszeniu; pomiary ręczne również zapisują wynik i czas ostatniego sprawdzenia.
 
 ## Bezpieczeństwo i diagnostyka
 

@@ -1,12 +1,13 @@
 <?php
 declare(strict_types=1);
 
-if (PHP_SAPI !== 'cli') {
+if (PHP_SAPI !== 'cli'
+    && realpath((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
     http_response_code(404);
     exit;
 }
 
-require __DIR__ . '/common.php';
+require_once __DIR__ . '/common.php';
 
 const PING_CONNECT_TIMEOUT = 7;
 const PING_SESSION_TIMEOUT = 9;

@@ -77,6 +77,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare("DELETE FROM hubs WHERE id=?");
                 $stmt->execute([$id]);
                 $notice = 'Hub usunięty.';
+            } elseif ($action === 'issue_owner_code') {
+                $id = filter_var(post_string($_POST, 'id'), FILTER_VALIDATE_INT);
+                if (!$id || $id < 1) {
+                    throw new InvalidArgumentException('Nieprawidłowy identyfikator huba.');
+                }
+                $ownerToken = bin2hex(random_bytes(32));
+                $stmt = $pdo->prepare("UPDATE hubs SET owner_token_hash=?,owner_ping_at=NULL WHERE id=? AND status<>'rejected'");
+                $stmt->execute([hash('sha256', $ownerToken), $id]);
+                if ($stmt->rowCount() !== 1) {
+                    throw new InvalidArgumentException('Nie znaleziono aktywnego huba do wygenerowania kodu.');
+                }
+                $notice = 'Nowy prywatny kod właściciela dla huba #' . $id . ': ' . $ownerToken . ' — skopiuj go i przekaż właścicielowi bezpiecznym kanałem. Kod nie będzie ponownie wyświetlony.';
             } elseif ($action === 'save_hub') {
                 $hub = normalize_hub_input($_POST);
                 $id = filter_var(post_string($_POST, 'id') ?: '0', FILTER_VALIDATE_INT);
@@ -497,6 +509,9 @@ page_start('Panel administracyjny');
             <td><div class="actions"><a class="button secondary" href="?tab=hubs&amp;edit_hub=<?= (int) $hub['id'] ?>">Edytuj</a><form method="post" onsubmit="return confirm('Usunąć hub i historię jego pingów?')">
                 <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="id" value="<?= (int) $hub['id'] ?>">
                 <button class="secondary" name="action" value="delete_hub">Usuń</button>
+            </form><form method="post" onsubmit="return confirm('Wygenerować nowy prywatny kod właściciela? Poprzedni kod przestanie działać.')">
+                <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="id" value="<?= (int) $hub['id'] ?>">
+                <button class="secondary" name="action" value="issue_owner_code">Kod właściciela</button>
             </form></div></td>
         </tr><?php endforeach; ?>
         </tbody></table></div></section>
