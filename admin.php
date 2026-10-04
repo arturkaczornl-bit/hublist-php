@@ -77,6 +77,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare("DELETE FROM hubs WHERE id=?");
                 $stmt->execute([$id]);
                 $notice = 'Hub usunięty.';
+            } elseif ($action === 'delete_all_hubs') {
+                if (post_string($_POST, 'confirmation') !== 'USUN WSZYSTKIE HUBY') {
+                    throw new InvalidArgumentException('Wpisz dokładnie USUN WSZYSTKIE HUBY, aby potwierdzić usunięcie.');
+                }
+                $pdo->beginTransaction();
+                try {
+                    $count = (int) $pdo->query('SELECT COUNT(*) FROM hubs')->fetchColumn();
+                    $pdo->exec('DELETE FROM hubs');
+                    $pdo->commit();
+                    $notice = 'Usunięto wszystkie huby (' . $count . ').';
+                } catch (Throwable $exception) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    throw $exception;
+                }
+            } elseif ($action === 'queue_hub_ping') {
+                $id = filter_var(post_string($_POST, 'id'), FILTER_VALIDATE_INT);
+                if (!$id || $id < 1) {
+                    throw new InvalidArgumentException('Nieprawidłowy identyfikator huba.');
+                }
+                $stmt = $pdo->prepare('SELECT id FROM hubs WHERE id=?');
+                $stmt->execute([$id]);
+                if (!$stmt->fetchColumn()) {
+                    throw new InvalidArgumentException('Nie znaleziono huba do pingowania.');
+                }
+                $stmt = $pdo->prepare('INSERT INTO hub_ping_queue (hub_id,queued_at) VALUES (?,UTC_TIMESTAMP())
+                    ON DUPLICATE KEY UPDATE queued_at=VALUES(queued_at)');
+                $stmt->execute([$id]);
+                $notice = 'Pingowanie huba dodano do kolejki. Wynik pojawi się po kolejnym uruchomieniu zadania cron.';
+            } elseif ($action === 'queue_all_hub_pings') {
+                $count = (int) $pdo->query('SELECT COUNT(*) FROM hubs')->fetchColumn();
+                if ($count === 0) {
+                    $notice = 'Brak hubów do pingowania.';
+                } else {
+                    $pdo->exec('INSERT INTO hub_ping_queue (hub_id,queued_at)
+                        SELECT id,UTC_TIMESTAMP() FROM hubs
+                        ON DUPLICATE KEY UPDATE queued_at=VALUES(queued_at)');
+                    $notice = 'Pingowanie wszystkich hubów (' . $count . ') dodano do kolejki. Zadanie cron będzie je sprawdzać partiami.';
+                }
             } elseif ($action === 'issue_owner_code') {
                 $id = filter_var(post_string($_POST, 'id'), FILTER_VALIDATE_INT);
                 if (!$id || $id < 1) {
@@ -366,7 +406,8 @@ if (!admin_logged_in()) {
 }
 
 $pending = $pdo->query("SELECT * FROM hubs WHERE status='pending' ORDER BY created_at ASC")->fetchAll();
-$hubRows = $pdo->query("SELECT * FROM hubs WHERE status <> 'rejected' ORDER BY status, name")->fetchAll();
+$hubRows = $pdo->query('SELECT * FROM hubs ORDER BY status, name')->fetchAll();
+$hubPingQueueCount = (int) $pdo->query('SELECT COUNT(*) FROM hub_ping_queue')->fetchColumn();
 $downloadRows = $pdo->query('SELECT * FROM downloads ORDER BY category, sort_order, name')->fetchAll();
 $downloadCategories = download_categories();
 $downloadCategoryRows = download_category_details();
@@ -500,13 +541,31 @@ page_start('Panel administracyjny');
             <label class="field">Widoczność<select name="status"><option value="approved">Opublikowany</option><option value="pending">Oczekuje</option></select></label>
             <div class="field full"><button type="submit">Dodaj hub</button></div>
         </form></section>
-        <section class="panel"><h2>Zarządzaj hubami</h2><div class="table-wrap"><table>
+        <section class="panel">
+        <h2>Zarządzaj hubami</h2>
+        <p class="muted">W kolejce pingowania: <?= $hubPingQueueCount ?>. Ręczne pomiary są wykonywane przez zadanie cron, maksymalnie partiami zgodnie z limitem pinger.php.</p>
+        <div class="actions">
+            <form method="post" onsubmit="return confirm('Dodać do kolejki pingowanie wszystkich hubów, także oczekujących i odrzuconych?')">
+                <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+                <button name="action" value="queue_all_hub_pings">Pinguj wszystkie huby</button>
+            </form>
+        </div>
+        <form method="post" class="grid" style="margin:16px 0" onsubmit="return confirm('To trwale usunie wszystkie huby oraz powiązaną historię pingów. Tej operacji nie można cofnąć. Kontynuować?')">
+            <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+            <label class="field">Aby trwale usunąć wszystkie huby, wpisz: USUN WSZYSTKIE HUBY
+                <input name="confirmation" required autocomplete="off">
+            </label>
+            <div class="field"><button class="secondary" name="action" value="delete_all_hubs">Usuń wszystkie huby</button></div>
+        </form>
+        <div class="table-wrap"><table>
         <thead><tr><th>Hub</th><th>Adres</th><th>Status</th><th>Ostatni ping</th><th>Akcje</th></tr></thead><tbody>
         <?php foreach ($hubRows as $hub): ?><tr>
             <td><strong><?= e($hub['name']) ?></strong><small><?= e($hub['description']) ?></small></td>
             <td><?= e($hub['protocol']) ?>://<?= e($hub['host']) ?>:<?= (int) $hub['port'] ?></td>
             <td><?= e($hub['status']) ?></td><td><?= e($hub['pinger_status'] ?: 'Brak pomiaru') ?><small><?= e(utc_datetime($hub['last_ping_at'])) ?></small></td>
-            <td><div class="actions"><a class="button secondary" href="?tab=hubs&amp;edit_hub=<?= (int) $hub['id'] ?>">Edytuj</a><form method="post" onsubmit="return confirm('Usunąć hub i historię jego pingów?')">
+            <td><div class="actions"><a class="button secondary" href="?tab=hubs&amp;edit_hub=<?= (int) $hub['id'] ?>">Edytuj</a>
+            <form method="post"><input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="id" value="<?= (int) $hub['id'] ?>"><button class="secondary" name="action" value="queue_hub_ping">Pinguj</button></form>
+            <form method="post" onsubmit="return confirm('Usunąć hub i jego powiązaną historię pingów?')">
                 <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>"><input type="hidden" name="id" value="<?= (int) $hub['id'] ?>">
                 <button class="secondary" name="action" value="delete_hub">Usuń</button>
             </form><form method="post" onsubmit="return confirm('Wygenerować nowy prywatny kod właściciela? Poprzedni kod przestanie działać.')">

@@ -30,7 +30,7 @@ Instalator próbuje zaimportować huby z kilku publicznych źródeł. Zewnętrzn
 
 ## Panel i funkcje
 
-- `admin.php` — logowanie, moderacja zgłoszeń, zarządzanie hubami i Pobieralnią, edycja pozycji menu, ustawienia pingera, statystyki aktywnych sesji, historia odwiedzin i blokowanie adresów IP;
+- `admin.php` — logowanie, moderacja zgłoszeń, zarządzanie hubami (edycja, usuwanie pojedyncze lub wszystkich, pingowanie pojedyncze lub wszystkich przez kolejkę), Pobieralnią, pozycjami menu, ustawieniami pingera, statystykami aktywnych sesji, historią odwiedzin i blokowaniem adresów IP;
 - `index.php` — strona główna z podsumowaniem katalogu, feedem XML, ostatnimi zgłoszeniami i linkami do poszczególnych działów;
 - `search.php` — osobna wyszukiwarka hubów z filtrami adresu/IP/portu, protokołu, kraju, statusu, serwera, liczby użytkowników, share i TLS; sortowanie po użytkownikach, share, dostępności, pingu, czasie sprawdzenia lub nazwie;
 - `stats.php` — publiczny ranking dostępności hubów w ostatnich 30 dniach z liczbą pomiarów i czasem ostatniego sprawdzenia przez pingera;
@@ -71,7 +71,7 @@ W administracji ustaw odstęp (od 5 do 10080 minut) między sprawdzeniami tego s
 
 Zastąp ścieżkę do PHP i strony wartościami z hostingu. `--limit=500` ogranicza liczbę hubów w jednym przebiegu; sam przebieg ma limit 240 sekund, więc przy dużej liczbie hubów pozostałe zostaną sprawdzone przy następnych uruchomieniach. Panel strony nie może samodzielnie zmienić crona hostingu.
 
-Automatyczny pinger sprawdza wyłącznie zatwierdzone huby i wymaga działającego zadania cron. Bez crona automatyczne pomiary nie będą wykonywane. Właściciel może uruchomić pojedynczy pomiar ręcznie w prywatnym panelu kodem wydanym po zgłoszeniu; pomiary ręczne również zapisują wynik i czas ostatniego sprawdzenia.
+Automatyczny pinger sprawdza zatwierdzone huby i wymaga działającego zadania cron. Bez crona automatyczne ani administracyjne pomiary z kolejki nie będą wykonywane. W panelu administratora można dodać do kolejki jeden hub albo wszystkie huby (w tym oczekujące i odrzucone); pinger opróżnia kolejkę partiami przed zwykłymi pomiarami. Usuwanie pojedynczego wpisu kasuje także jego historię. Usunięcie wszystkich wymaga wpisania frazy potwierdzającej i kasuje wszystkie huby oraz ich historię. Właściciel może też uruchomić pojedynczy pomiar ręcznie w prywatnym panelu kodem wydanym po zgłoszeniu; pomiary ręczne również zapisują wynik i czas ostatniego sprawdzenia.
 
 ## Bezpieczeństwo i diagnostyka
 

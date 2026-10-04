@@ -535,11 +535,19 @@ function run_pinger(): void
         }
     }
 
-    $hubs = $pdo->query(
-        "SELECT * FROM hubs WHERE status='approved'
-         AND (last_ping_at IS NULL OR last_ping_at <= UTC_TIMESTAMP() - INTERVAL $interval MINUTE)
-         ORDER BY last_ping_at IS NULL DESC, last_ping_at ASC LIMIT $limit"
+    $queuedHubs = $pdo->query(
+        "SELECT h.*,q.queued_at AS ping_queue_queued_at
+         FROM hub_ping_queue q JOIN hubs h ON h.id=q.hub_id
+         ORDER BY q.queued_at ASC LIMIT $limit"
     )->fetchAll();
+    $remaining = max(0, $limit - count($queuedHubs));
+    $scheduledHubs = $remaining > 0 ? $pdo->query(
+        "SELECT h.* FROM hubs h WHERE h.status='approved'
+         AND NOT EXISTS (SELECT 1 FROM hub_ping_queue q WHERE q.hub_id=h.id)
+         AND (last_ping_at IS NULL OR last_ping_at <= UTC_TIMESTAMP() - INTERVAL $interval MINUTE)
+         ORDER BY h.last_ping_at IS NULL DESC, h.last_ping_at ASC LIMIT $remaining"
+    )->fetchAll() : [];
+    $hubs = array_merge($queuedHubs, $scheduledHubs);
     $update = $pdo->prepare(
         'UPDATE hubs SET pinger_status=?, pinger_error=?, ping_ms=?, last_ping_at=UTC_TIMESTAMP(),
             tls_cert_valid=?, tls_cert_expires=?, tls_cert_issuer=?, tls_fingerprint=?,
@@ -585,6 +593,10 @@ function run_pinger(): void
             $hub['id'], $result['status'] === 'online' ? 1 : 0, $result['ping_ms'],
             $result['tls_cert_valid'], $result['tls_cert_expires'], $result['online_users'],
         ]);
+        if (isset($hub['ping_queue_queued_at'])) {
+            $dequeue = $pdo->prepare('DELETE FROM hub_ping_queue WHERE hub_id=? AND queued_at=?');
+            $dequeue->execute([$hub['id'], $hub['ping_queue_queued_at']]);
+        }
         printf("%s %s://%s:%d %s%s\n", gmdate('c'), strtolower($hub['protocol']), $hub['host'],
             (int) $hub['port'], $result['status'], $result['error'] ? ' (' . $result['error'] . ')' : '');
     }

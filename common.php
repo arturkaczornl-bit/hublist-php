@@ -261,6 +261,12 @@ function upgrade_hub_details(PDO $pdo): void
         last_ping_at DATETIME NOT NULL,
         INDEX idx_owner_ping_limits_time (last_ping_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE IF NOT EXISTS hub_ping_queue (
+        hub_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+        queued_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_hub_ping_queue_time (queued_at),
+        CONSTRAINT fk_hub_ping_queue_hub FOREIGN KEY (hub_id) REFERENCES hubs(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
 
 function download_categories(): array
