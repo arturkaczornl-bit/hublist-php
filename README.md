@@ -24,6 +24,8 @@ Panel administratora (`admin.php?tab=visitors`) pokazuje sesje z aktywnością w
 4. Zaloguj się przez `admin.php`, sprawdź wpisy importowane do moderacji i zatwierdź te, które mają być publiczne.
 5. Po instalacji usuń `setup.php` z serwera. Zachowaj `config.php` poza publicznym repozytorium; `.htaccess` blokuje bezpośredni dostęp do tego pliku na Apache.
 
+Jeśli instalacja przerwała się, a `setup.php` informuje, że znaleziono `config.php`, nie oznacza to, że baza lub tabele zostały utworzone. Wykonaj kopię `config.php` poza katalogiem publicznym, sprawdź w panelu hostingu konfigurację bazy i usuń wyłącznie ten plik konfiguracyjny, aby ponowić instalację. Nie usuwaj bazy danych ani innych plików aplikacji. Nie przesyłaj `config.php` nikomu.
+
 Instalator próbuje zaimportować huby z kilku publicznych źródeł. Zewnętrzne listy mogą być niekompletne lub niedostępne; zaimportowane pozycje zawsze trafiają do kolejki oczekującej, nigdy nie są automatycznie publikowane. Nie są tworzone fikcyjne huby. Możesz też dodawać je ręcznie z panelu.
 
 ## Panel i funkcje

@@ -5,7 +5,7 @@ require_once __DIR__ . '/common.php';
 
 if (is_file(__DIR__ . '/config.php')) {
     http_response_code(403);
-    exit('Aplikacja jest już skonfigurowana. Usuń setup.php albo skontaktuj się z administratorem.');
+    exit('Znaleziono config.php. To nie potwierdza, że instalacja zakończyła się poprawnie. Jeśli instalacja przerwała się, wykonaj kopię config.php i po sprawdzeniu konfiguracji bazy usuń ten plik, aby ponowić instalację. Nie usuwaj bazy danych.');
 }
 
 $error = '';
@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             @chmod($configPath, 0600);
 
             try {
-                require __DIR__ . '/common.php';
+                require_once __DIR__ . '/common.php';
                 $pdo = db();
                 $statements = [
                     "CREATE TABLE IF NOT EXISTS admins (
